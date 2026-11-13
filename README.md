@@ -113,3 +113,7 @@ Built on the upstream MIT project, with its attribution preserved. The provided 
 The local achievement editor is available even when community achievement pages are private or unreadable. Select one or more missing achievements in the preview, then confirm. For Windows native operations the farmer temporarily disconnects to avoid competing with the desktop Steam session, then reconnects using the saved token. Completion is verified in a separate native read. Some server-controlled achievements can still be rejected.
 
 The cards-first dashboard shows the active eligible game, its remaining rights and the next game. When no rights remain, hours rotation resumes automatically with your saved priorities. A badge-counter decrease is an observation, not a guaranteed item drop time.
+
+### Remove an account from the app
+
+Open **Accounts → Remove from app**, or use the same option in **Account settings**. Check the account name in the confirmation dialog. Removal stops its running tasks, clears its saved sign-in and removes its entry and preferences. Your Steam account, games and achievements are unaffected. You can remove the last account; the app will show an empty list with an Add account button. Removal is unavailable during an achievement operation. To use the account again, add it and sign in.

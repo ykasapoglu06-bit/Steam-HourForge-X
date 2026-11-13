@@ -183,6 +183,7 @@ export class SteamAccount extends EventEmitter {
   }
 
   async beginLogin(method:'credentials'|'qr',credentials?:{accountName:string;password:string}):Promise<void>{
+    if(this.state.samBusy)throw new Error('REQUEST_BUSY');
     if(Date.now()<this.rateLimitedUntil)throw new Error('AUTH_RATE_LIMIT');
     if(this.state.connectedSince&&['farming','paused','online'].includes(this.state.status))throw new Error('ACCOUNT_ALREADY_CONNECTED');
     await this.stop();
@@ -306,7 +307,7 @@ export class SteamAccount extends EventEmitter {
   async logout():Promise<void> {
     await this.stop();
     clearSavedToken(this.config.name,this.settings.dataDirectory);
-    this.config.password=undefined;this.config.sharedSecret=undefined;this.config.accountName=undefined;this.config.loginMethod='qr';
+    this.config.password=undefined;this.config.sharedSecret=undefined;this.config.accountName=undefined;this.config.loginMethod='credentials';this.state.loginMethod='credentials';
     this.state.steamId=null;this.state.steamAccountName=null;this.state.gamesPlaying=[];
     this.state.cardQueue=[];this.state.cardCheckedAt=null;this.state.cardStatus='waiting';this.state.cardError=null;
     this.lastCardCounts.clear();this.state.cardSessionDrops=0;this.state.cardStartedAt=null;this.currentCardAppid=null;
@@ -529,22 +530,13 @@ export class SteamAccount extends EventEmitter {
   private bindEvents(): void {
     this.client.on("accountInfo", (name: string) => {
       if (!name) return;
-      const prev = this.state.steamAccountName;
-      this.state.steamAccountName = name;
-      const tokenPath = join(this.settings.dataDirectory, "tokens", `${this.config.name}.txt`);
-      const saved = readSavedToken(tokenPath);
-      if (saved?.refreshToken) {
-        persistToken(tokenPath, saved.refreshToken, name);
-      }
-      if (!prev) {
-        this.log.debug({ steamAccount: name }, "Steam account name resolved");
-      }
+      this.state.displayName=name.slice(0,128);
     });
 
     this.client.on("loggedOn", async () => {
       if (this.stopped) { this.client.logOff(); return; }
       this.backoffMs = 5_000;
-      const steamName = this.client.accountInfo?.name ?? this.state.steamAccountName;
+      const steamName = this.state.steamAccountName ?? this.config.accountName ?? null;
       const steamId = this.client.steamID?.getSteamID64() ?? null;
 
       if (this.claimCheck) {

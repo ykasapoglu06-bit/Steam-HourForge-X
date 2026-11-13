@@ -122,7 +122,7 @@ function renderGames(id,games,a,fromProfile=false,emptyKey='noGames'){
 }
 
 function renderAccounts(){
-  const signature=JSON.stringify([language,reachable,mutating,accounts.map(a=>[a.name,a.label,a.status,a.manualPaused,a.library.length,a.priorityGames.length,a.gamesPlaying,a.mode,a.steamId,a.avatarUrl,a.displayName,a.vanityUrl])]);
+  const signature=JSON.stringify([language,reachable,mutating,accounts.map(a=>[a.name,a.label,a.status,a.manualPaused,a.library.length,a.priorityGames.length,a.gamesPlaying,a.mode,a.steamId,a.avatarUrl,a.displayName,a.vanityUrl,a.samBusy])]);
   if(signature===accountSignature)return;accountSignature=signature;
   $('accountCards').innerHTML=accounts.map(a=>{
     const offline=['offline','error','skipped'].includes(a.status);
@@ -137,7 +137,7 @@ function renderAccounts(){
       ['CSWatch',`https://cswat.ch/stats/${id}`,'cswatch.png'],
       ['SteamIDCheck',`https://steamidcheck.com/profile/${id}`,'steamidcheck.svg']
     ].map(([name,href,icon])=>`<a class="service-link" href="${href}" target="_blank" rel="noopener noreferrer" title="${escape(t('openService',{name}))}"><img src="/logos/${icon}" alt="" loading="lazy"><span>${name}</span><span class="external-arrow" aria-hidden="true">↗</span></a>`).join(''):'';
-    return `<article class="account-card" data-status="${escape(a.status)}"><div class="account-identity"><img class="account-avatar" src="${escape(a.avatarUrl||'/avatar.svg')}" data-avatar alt="${escape(t('profilePhoto'))}"><div><h3>${escape(a.displayName||a.label)}</h3><small class="account-label">${escape(a.label)}</small><div class="status">${escape(status(a))}</div></div></div>${id?`<div class="profile-identity"><dl><div><dt>SteamID64</dt><dd>${id}</dd></div><div><dt>SteamID</dt><dd>${steam2}</dd></div><div><dt>Vanity URL</dt><dd>${vanity?`/id/${escape(vanity)}`:escape(t('vanityUnavailable'))}</dd></div></dl><a href="https://steamcommunity.com/profiles/${id}/" target="_blank" rel="noopener noreferrer">${escape(t('goProfile'))} ↗</a></div>`:`<p>${escape(t('loggedOutHelp'))}</p>`}<div class="meta"><div><strong>${a.library.length}</strong><span>${escape(t('totalGames'))}</span></div><div><strong>${activeSet(a).size}</strong><span>${escape(t('active'))}</span></div><div><strong>${a.priorityGames.length}</strong><span>${escape(t('pinned'))}</span></div></div>${links?`<div class="service-links">${links}</div><p class="external-note">${escape(t('externalServicesNote'))}</p>`:''}<div class="actions"><button class="primary" data-manage="${escape(a.name)}">${escape(t('manage'))}</button><button data-control="${offline?'start':'stop'}" data-name="${escape(a.name)}" ${mutating||!reachable?'disabled':''}>${escape(t(offline?'connect':'disconnect'))}</button><button data-control="logout" data-name="${escape(a.name)}" ${mutating||!reachable?'disabled':''}>${escape(t('logout'))}</button></div></article>`;
+    return `<article class="account-card" data-status="${escape(a.status)}"><div class="account-identity"><img class="account-avatar" src="${escape(a.avatarUrl||'/avatar.svg')}" data-avatar alt="${escape(t('profilePhoto'))}"><div><h3>${escape(a.displayName||a.label)}</h3><small class="account-label">${escape(a.label)}</small><div class="status">${escape(status(a))}</div></div></div>${id?`<div class="profile-identity"><dl><div><dt>SteamID64</dt><dd>${id}</dd></div><div><dt>SteamID</dt><dd>${steam2}</dd></div><div><dt>Vanity URL</dt><dd>${vanity?`/id/${escape(vanity)}`:escape(t('vanityUnavailable'))}</dd></div></dl><a href="https://steamcommunity.com/profiles/${id}/" target="_blank" rel="noopener noreferrer">${escape(t('goProfile'))} ↗</a></div>`:`<p>${escape(t('loggedOutHelp'))}</p>`}<div class="meta"><div><strong>${a.library.length}</strong><span>${escape(t('totalGames'))}</span></div><div><strong>${activeSet(a).size}</strong><span>${escape(t('active'))}</span></div><div><strong>${a.priorityGames.length}</strong><span>${escape(t('pinned'))}</span></div></div>${links?`<div class="service-links">${links}</div><p class="external-note">${escape(t('externalServicesNote'))}</p>`:''}<div class="actions"><button class="primary" data-manage="${escape(a.name)}">${escape(t('manage'))}</button><button data-control="${offline?'start':'stop'}" data-name="${escape(a.name)}" ${mutating||!reachable?'disabled':''}>${escape(t(offline?'connect':'disconnect'))}</button><button data-control="logout" data-name="${escape(a.name)}" ${mutating||!reachable?'disabled':''}>${escape(t('logout'))}</button><button class="danger-text" data-remove="${escape(a.name)}" ${mutating||!reachable||a.samBusy?'disabled':''}>${escape(t('removeAccount'))}</button></div></article>`;
   }).join('');
 }
 
@@ -149,7 +149,8 @@ function render(){
   text('overall',t('connectedAccounts',{count:accounts.filter(x=>['farming','paused','online'].includes(x.status)).length}));
   show('connectionBanner',!reachable);text('connectionBanner',t('offlineBanner'));
   ['pauseAll','resumeAll','addAccount','addAccount2'].forEach(id=>$(id).disabled=mutating||!reachable);
-  if(!a)return;
+  show('emptyAccounts',!a&&view!=='about');
+  if(!a){text('accountLabel','');$('accountLabel').hidden=true;for(const id of ['hero','stats','loginPanel','activityView','libraryView','discoverView','queueView','cardFocus','accountsView'])show(id,false);$('pauseAll').disabled=$('resumeAll').disabled=true;return;}
   const needsLogin=renderLogin(a);
   $('pauseAll').disabled=mutating||!reachable||!accounts.some(x=>x.status==='farming'&&!x.isPaused);
   $('resumeAll').disabled=mutating||!reachable||!accounts.some(x=>x.manualPaused);
@@ -224,6 +225,7 @@ document.addEventListener('click',event=>{
   if(button.dataset.view){setView(button.dataset.view);return;}
   if(button.dataset.go){setView(button.dataset.go);return;}
   if(button.dataset.account){selectAccount(button.dataset.account);return;}
+  if(button.dataset.remove){openRemove(button.dataset.remove);return;}
   if(button.dataset.manage){selectAccount(button.dataset.manage);setView('activity');window.scrollTo({top:0});return;}
   if(button.dataset.filter){filter=button.dataset.filter;render();return;}
   if(button.dataset.pin){void togglePriority(Number(button.dataset.pin));return;}
@@ -268,12 +270,17 @@ $('scanAll').onclick=async()=>{await command('refreshLibrary');filter='all';setV
 $('pauseAll').onclick=()=>command('pause','*');$('resumeAll').onclick=()=>command('resume','*');
 $('showPriorities').onclick=()=>{filter='all';$('libraryDetails').open=true;setView('library');};
 function openAdd(){text('addError','');$('newLabel').value='';$('addDialog').showModal();$('newLabel').focus();}
-$('addAccount').onclick=openAdd;$('addAccount2').onclick=openAdd;
+$('addAccount').onclick=openAdd;$('addAccount2').onclick=openAdd;$('addFirstAccount').onclick=openAdd;
 $('addForm').onsubmit=async event=>{
   event.preventDefault();const button=event.submitter;button.disabled=true;text('addError','');
   try{const result=await request('/api/accounts',{label:$('newLabel').value.trim()});if(pollTask)await pollTask;await poll();selectAccount(result.name);$('addDialog').close();setView('activity');window.scrollTo({top:0});}
   catch(error){text('addError',errorMessage(error));}finally{button.disabled=false;}
 };
+function openRemove(name){const a=accounts.find(item=>item.name===name);if(!a||mutating||a.samBusy)return;$('removeDialog').dataset.name=name;text('removeLabel',a.label);text('removeError','');$('removeDialog').showModal();}
+$('removeFromSettings').onclick=()=>{const name=$('settingsDialog').dataset.name;$('settingsDialog').close();openRemove(name);};
+$('removeForm').onsubmit=async event=>{event.preventDefault();if(mutating)return;const name=$('removeDialog').dataset.name;mutating=true;render();$('confirmRemove').disabled=true;text('confirmRemove',t('removingAccount'));text('removeError','');
+try{await request('/api/remove-account',{name,confirmed:true});$('removeDialog').close();if(selectedName===name){selectedName='';loginAccount='';profileResult=null;loginLocalError='';$('steamPassword').value='';$('guardCode').value='';try{localStorage.removeItem('steam-hourforge-x.account');}catch{}}if(pollTask)await pollTask;await poll();toast(t('accountRemoved'));}
+catch(error){text('removeError',errorMessage(error));}finally{mutating=false;$('confirmRemove').disabled=false;text('confirmRemove',t('removeAccountConfirm'));render();}};
 $('settings').onclick=()=>{const a=current();if(!a)return;$('settingsDialog').dataset.name=a.name;$('editLabel').value=a.label;$('rotation').value=a.rotationMinutes;text('settingsError','');$('settingsDialog').showModal();};
 $('settingsForm').onsubmit=async event=>{
   event.preventDefault();const a=accounts.find(a=>a.name===$('settingsDialog').dataset.name);if(!a)return;event.submitter.disabled=true;text('settingsError','');

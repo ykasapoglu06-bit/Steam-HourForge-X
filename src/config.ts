@@ -25,7 +25,7 @@ export const AccountSchema = z.object({
 });
 
 export const ConfigSchema = z.object({
-  accounts: z.array(AccountSchema).min(1, "At least one account is required"),
+  accounts: z.array(AccountSchema).max(20),
   settings: z
     .object({
       logOnIntervalMs: z.number().positive().default(600_000),

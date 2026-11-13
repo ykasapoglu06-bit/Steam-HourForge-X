@@ -98,7 +98,7 @@ describe("SteamAccount", () => {
       await account.logout();client.emit('refreshToken','late-sensitive-token');
       expect(account.getState().status).toBe('offline');expect(account.getState().steamId).toBeNull();
       expect(config.accounts[0]!.password).toBeUndefined();expect(config.accounts[0]!.sharedSecret).toBeUndefined();
-      expect(config.accounts[0]!.loginMethod).toBe('qr');
+      expect(config.accounts[0]!.loginMethod).toBe('credentials');
       const token=join(directory,'tokens','logout.txt');
       expect(!existsSync(token)||readFileSync(token,'utf8')==='').toBe(true);
       expect(persistTokenMock).not.toHaveBeenCalledWith(expect.anything(),'late-sensitive-token',expect.anything());
@@ -221,7 +221,7 @@ describe("SteamAccount", () => {
     expect(state.steamAccountName).toBe("Alden");
   });
 
-  it("preserves configured account name and stores steamAccountName when accountInfo fires", () => {
+  it("keeps a display name separate from the real Steam login name", () => {
     const config = ConfigSchema.parse({
       accounts: [{ name: "alt", games: [1623730], loginMethod: "qr" }],
     });
@@ -235,7 +235,8 @@ describe("SteamAccount", () => {
 
     const state = account.getState();
     expect(state.name).toBe("alt");
-    expect(state.steamAccountName).toBe("TestAcc");
+    expect(state.steamAccountName).toBe("Alden");
+    expect(state.displayName).toBe("TestAcc");
   });
 
   it("skips logon when claimCheck detects duplicate active Steam account", async () => {

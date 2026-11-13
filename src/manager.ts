@@ -9,6 +9,7 @@ import { join } from 'node:path';
 export class AccountManager {
   private sam:SamService;
   private accounts: SteamAccount[] = [];
+  private removing=new Set<string>();
   constructor(private config: AppConfig, private configPath = "config.json") {
     this.sam=new SamService(runSam,Date.now,entry=>{
       mkdirSync(config.settings.dataDirectory,{recursive:true});
@@ -42,6 +43,7 @@ export class AccountManager {
   async stopAll(): Promise<void> { await Promise.all(this.accounts.map(account => account.stop())); }
   getStates(): Readonly<AccountState>[] { return this.accounts.map(account => account.getState()); }
   private find(name: string): SteamAccount {
+    if(this.removing.has(name))throw new Error('REQUEST_BUSY');
     const account = this.accounts.find(item => item.getState().name === name);
     if (!account) throw new Error("ACCOUNT_NOT_FOUND");
     return account;
@@ -57,6 +59,18 @@ export class AccountManager {
     this.save();
     void account.start().catch(() => log.warn({ account: config.name }, "Could not start account"));
     return config.name;
+  }
+  async removeAccount(name:string):Promise<void>{
+    const account=this.find(name);
+    if(account.getState().samBusy)throw new Error('REQUEST_BUSY');
+    this.removing.add(name);
+    try{
+      await account.logout();this.sam.invalidate(name);
+      const next={...this.config,accounts:this.config.accounts.filter(item=>item.name!==name)};
+      writeFileSync(this.configPath+'.tmp',JSON.stringify(next,null,2));renameSync(this.configPath+'.tmp',this.configPath);
+      this.config.accounts=next.accounts;
+      this.accounts=this.accounts.filter(item=>item!==account);account.removeAllListeners();
+    }finally{this.removing.delete(name);}
   }
   updatePreferences(name: string, input: unknown): void {
     const preferences = AccountPreferencesSchema.parse(input);

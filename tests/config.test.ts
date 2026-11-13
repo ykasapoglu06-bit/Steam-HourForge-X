@@ -66,8 +66,8 @@ describe("ConfigSchema", () => {
     expect(config.settings.dataDirectory).toBe("data");
   });
 
-  it("rejects empty accounts array", () => {
-    expect(() => ConfigSchema.parse({ accounts: [] })).toThrow();
+  it("accepts an empty list after the last local account is removed", () => {
+    expect(ConfigSchema.parse({ accounts: [] }).accounts).toEqual([]);
   });
 
   it("accepts multiple QR-only accounts with unique names", () => {

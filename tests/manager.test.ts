@@ -7,6 +7,22 @@ import { AccountManager } from "../src/manager.js";
 import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 const folders: string[]=[];
+it('removes only the selected local account, clears its login and allows an empty saved list',async()=>{
+  const path=folder(),file=join(path,'config.json');
+  const config=ConfigSchema.parse({accounts:[{name:'first',games:['ALL'],loginMethod:'credentials'},{name:'second',games:['ALL'],loginMethod:'credentials'}],settings:{dataDirectory:join(path,'data')}});
+  const manager=new AccountManager(config,file),internal=(manager as any).accounts as SteamAccount[];
+  const logout=vi.spyOn(internal[1]!,'logout').mockResolvedValue();
+  await manager.removeAccount('second');expect(logout).toHaveBeenCalledOnce();
+  expect(manager.getStates().map(a=>a.name)).toEqual(['first']);expect(JSON.parse(readFileSync(file,'utf8')).accounts).toHaveLength(1);
+  vi.spyOn(internal[0]!,'logout').mockResolvedValue();await manager.removeAccount('first');
+  expect(manager.getStates()).toEqual([]);expect(()=>ConfigSchema.parse(JSON.parse(readFileSync(file,'utf8')))).not.toThrow();
+  expect(new AccountManager(ConfigSchema.parse(JSON.parse(readFileSync(file,'utf8'))),file).count).toBe(0);
+});
+it('blocks removing an account during an achievement operation',async()=>{
+ const path=folder(),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,join(path,'config.json'));
+ (manager.getStates()[0] as any).samBusy=true;
+ await expect(manager.removeAccount('main')).rejects.toThrow('REQUEST_BUSY');expect(manager.count).toBe(1);
+});
 beforeEach(()=>{vi.spyOn(SteamUser.prototype,'getPersonas').mockResolvedValue({personas:{}});});
 function folder(){const path=mkdtempSync(join(tmpdir(),'hourloom-test-'));folders.push(path);return path;}
 afterEach(()=>{vi.restoreAllMocks();for(const path of folders.splice(0))rmSync(path,{recursive:true,force:true});});

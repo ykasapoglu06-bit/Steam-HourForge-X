@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import type { AccountManager } from "./manager.js";
 
-export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard">, port = 17321) {
+export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard" | "removeAccount">, port = 17321) {
   const html = readFileSync(new URL("../ui/index.html", import.meta.url));
   const server = createServer(async (req, res) => {
     const address = server.address();
@@ -23,8 +23,8 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
       res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
       res.end(readFileSync(new URL(`../ui/${file}`, import.meta.url))); return;
     }
-    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.0", serverTime: Date.now(), accounts: manager.getStates() });
-    if (req.method === "POST" && ["/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard"].includes(req.url ?? "")) {
+    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.1", serverTime: Date.now(), accounts: manager.getStates() });
+    if (req.method === "POST" && ["/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
       if (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "LOCAL_ONLY" });
       try {
         let body = "";
@@ -35,6 +35,7 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
           return json(201, { ok: true, name: manager.addAccount(data.label) });
         }
         if (typeof data.name !== "string") return json(400, { error: "INVALID_SETTINGS" });
+        if(req.url==='/api/remove-account'){if(data.confirmed!==true)return json(400,{error:'REMOVAL_CONFIRMATION_REQUIRED'});await manager.removeAccount(data.name);return json(200,{ok:true});}
         if(req.url==='/api/login'){await manager.login(data.name,data);return json(202,{ok:true});}
         if(req.url==='/api/guard'){await manager.guard(data.name,data.code);return json(200,{ok:true});}
         if(['/api/games','/api/achievements','/api/achievement-preview','/api/achievement-complete'].includes(req.url!)){
@@ -66,5 +67,3 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
   await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(port, bindHost, resolve); });
   return server;
 }
-
-

@@ -4,6 +4,22 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 let dom:any;
 afterEach(()=>{dom?.window.close();vi.unstubAllGlobals();vi.restoreAllMocks();});
+it('removes a confirmed account, shows the empty state and lets the user add another',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ let accounts:any[]=[{name:'test',label:'Test account',status:'offline',gamesPlaying:[],library:[],priorityGames:[],cardQueue:[],queue:[],nextGames:[],manualGames:[],mode:'hours',cardStatus:'waiting',achievements:{}}];const calls:any[]=[];
+ const fetchMock=vi.fn(async(path:string,options?:any)=>{if(!options?.method)return new Response(JSON.stringify({accounts}));const body=JSON.parse(options.body);calls.push({path,body});if(path==='/api/remove-account')accounts=[];return new Response('{"ok":true}');});
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:()=>0,confirm:()=>true}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('accountCards').querySelector('[data-remove]')).not.toBeNull());
+ $('accountCards').querySelector('[data-remove]').click();expect($('removeDialog').open).toBe(true);expect($('removeLabel').textContent).toBe('Test account');expect(calls).toHaveLength(0);
+ $('removeDialog').querySelector('[data-close]').click();expect($('removeDialog').open).toBe(false);expect(calls).toHaveLength(0);
+ $('accountCards').querySelector('[data-remove]').click();$('removeForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+ await vi.waitFor(()=>expect($('emptyAccounts').hidden).toBe(false));expect(calls[0]).toEqual({path:'/api/remove-account',body:{name:'test',confirmed:true}});expect($('hero').hidden).toBe(true);expect($('accountCards').children.length).toBe(0);
+ $('addFirstAccount').click();expect($('addDialog').open).toBe(true);
+});
 it('offers password login first, retries Guard codes, clears secrets and keeps errors scoped',async()=>{
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});
  dom.window.scrollTo=()=>{};
@@ -62,7 +78,7 @@ it("renders collapsed lists, priority selection, queue, achievements and sign-ou
   // @ts-expect-error browser module is plain JavaScript.
   await import('../ui/app.js');
   const $=(id:string)=>dom.window.document.getElementById(id);
-  await vi.waitFor(()=>expect($('headline').textContent).toContain('Saat kuyruğun'));
+  await vi.waitFor(()=>expect($('headline').textContent).toContain('Saat sırası'));
   dom.window.document.querySelector('[data-view="accounts"]').click();
   expect($('accountsView').hidden).toBe(false);
   expect($('accountCards').querySelector('.account-avatar').getAttribute('src')).toBe(a.avatarUrl);
@@ -73,7 +89,7 @@ it("renders collapsed lists, priority selection, queue, achievements and sign-ou
   expect($('accountCards').querySelectorAll('.service-link img')).toHaveLength(5);
   dom.window.document.querySelector('[data-view="about"]').click();expect($('aboutView').hidden).toBe(false);expect($('hero').hidden).toBe(true);
   dom.window.document.querySelector('[data-language="en"]').click();expect(dom.window.document.querySelector('[data-language="en"]').getAttribute('aria-pressed')).toBe('true');
-  expect($('aboutView').textContent).toContain('Your library, on your terms.');expect($('aboutView').textContent).toContain('Yusuf Kasapoglu');
+  expect($('aboutView').textContent).toContain('Your games and accounts in one place');expect($('aboutView').textContent).toContain('Yusuf Kasapoglu');
   $('language').value='tr';$('language').dispatchEvent(new dom.window.Event('change'));
   dom.window.document.querySelector('[data-view="activity"]').click();
   expect($('libraryDetails').open).toBe(false);expect($('libraryGames').children.length).toBe(0);

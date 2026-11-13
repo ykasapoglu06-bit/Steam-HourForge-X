@@ -64,3 +64,7 @@ Sorun bildirirken parolaları, tokenları, çerezleri veya kişisel `config.json
 Topluluk sayfası gizli veya okunamıyor olsa da yerel başarım düzenleyicisine ulaşabilirsin. Eksik başarım listesinden tek tek seçim yapabilir ya da tümünü seçebilirsin. Önizlemeyi kontrol edip onayla. Windows işlemi sırasında saat oturumu geçici olarak ayrılır; işlemden sonra kayıtlı oturumla yeniden bağlanır. Sonuç ayrı bir yerel Steam okumasıyla doğrulanır. Sunucudan yönetilen bazı başarımlar reddedilebilir.
 
 Önce kart modunda mevcut oyun, kalan kart hakkı ve sıradaki oyun gösterilir. Haklar bitince kaydedilmiş önceliklerle saat sırası otomatik devam eder. Rozet sayacındaki azalma gözlemlenir; kartın ne zaman düşeceği garanti edilmez.
+
+### Hesabı uygulamadan kaldır
+
+**Hesaplar → Hesabı uygulamadan kaldır** yolunu izle. Aynı seçenek hesap ayarlarında da bulunur. Onay ekranındaki hesap adını kontrol et. İşlemler durdurulur, kayıtlı giriş temizlenir ve hesabın kaydıyla tercihleri kaldırılır. Steam hesabın, oyunların ve başarımların etkilenmez. Son hesabı da kaldırabilirsin; panelde yeni hesap ekleme ekranı gösterilir. Başarım işlemi sürerken hesap kaldırılamaz. Hesabı yeniden kullanmak için ekleyip giriş yapman gerekir.

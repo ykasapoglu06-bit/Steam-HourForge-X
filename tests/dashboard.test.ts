@@ -2,6 +2,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 import { startDashboard } from "../src/dashboard.js";
 let server: Server;
+it('requires local origin and explicit confirmation before removing a local account',async()=>{
+ const manager={getStates:()=>[],removeAccount:vi.fn()};server=await startDashboard(manager as any,0);const url=`http://127.0.0.1:${(server.address() as any).port}`;
+ const post=(origin:string,confirmed?:boolean)=>fetch(url+'/api/remove-account',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'test',confirmed})});
+ expect((await post('https://example.com',true)).status).toBe(403);expect((await post(url)).status).toBe(400);expect(manager.removeAccount).not.toHaveBeenCalled();
+ expect((await post(url,true)).status).toBe(200);expect(manager.removeAccount).toHaveBeenCalledWith('test');
+});
 
 it('keeps credentials and Guard submissions local and never echoes secrets',async()=>{
   const manager={getStates:()=>[],login:vi.fn(),guard:vi.fn()};
