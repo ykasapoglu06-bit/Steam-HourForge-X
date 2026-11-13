@@ -29,6 +29,10 @@ Türkçe · [English](README.md)
 | Profil kısayolları | Steam fotoğrafı, SteamID64, Steam2 ID ve özel profil yolunu gör; Steam ve beş hesap hizmetini aç. |
 | Yerel tercihler | Hesap etiketi, öncelikler, grup süresi ve dil seçimi hatırlanır. |
 
+## Sıkı masaüstü ve mobil arayüz
+
+Altı sekmede ortak ve daha sıkı boşluk ölçüleri kullanılır. Dar ekranda gezinme altta, hesap seçimi içeriğin üstünde kalır; kartlar, formlar ve pencereler tek sütuna uyarlanır. Arayüz mobil tarayıcıları destekler; uygulama yerel kontrol paneli olarak kalır. Bu düzen değişikliği herkese açık site veya uzaktan telefon erişimi kurmaz.
+
 ## Windows'ta başla
 
 İndirilen sürüm bir **kaynak paketidir**; bağımsız kurulum programı veya paketlenmiş Node.js içermez.

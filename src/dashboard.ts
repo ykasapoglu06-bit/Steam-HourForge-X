@@ -4,7 +4,9 @@ import type { AccountManager } from "./manager.js";
 
 export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard" | "removeAccount">, port = 17321, onShutdown?: () => void) {
   let closing=false;
-  const html = readFileSync(new URL("../ui/index.html", import.meta.url));
+  const assetPaths=["/app.js", "/style.css", "/refinement.css", "/i18n.js", "/icon.svg", "/logo.png", "/flags/tr.svg", "/flags/en.svg", "/logos/steamidcheck.svg", "/avatar.svg", "/logos/steam.ico", "/logos/vaclist.ico", "/logos/csrep.ico", "/logos/csstats.ico", "/logos/cswatch.png"];
+  // Keep HTML, JS and CSS from the same launch, even when files are updated on disk.
+  const assets=new Map(['/',...assetPaths].map(path=>[path,readFileSync(new URL('../ui/'+(path==='/'?'index.html':path.slice(1)),import.meta.url))]));
   const server = createServer(async (req, res) => {
     const address = server.address();
     const actualPort = typeof address === "object" && address ? address.port : port;
@@ -16,15 +18,15 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
     const json = (code: number, data: unknown) => { res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" }); res.end(JSON.stringify(data)); };
     if (req.headers.host !== `127.0.0.1:${actualPort}`) return json(403, { error: "LOCAL_ONLY" });
     if (req.method === "GET" && req.url === "/") {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); res.end(html); return;
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); res.end(assets.get("/")); return;
     }
-    if (req.method === "GET" && ["/app.js", "/style.css", "/refinement.css", "/i18n.js", "/icon.svg", "/logo.png", "/flags/tr.svg", "/flags/en.svg", "/logos/steamidcheck.svg", "/avatar.svg", "/logos/steam.ico", "/logos/vaclist.ico", "/logos/csrep.ico", "/logos/csstats.ico", "/logos/cswatch.png"].includes(req.url ?? "")) {
+    if (req.method === "GET" && assetPaths.includes(req.url ?? "")) {
       const file = req.url!.slice(1);
       const contentType = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.ico') ? 'image/x-icon' : file.endsWith('.png') ? 'image/png' : 'text/css';
       res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
-      res.end(readFileSync(new URL(`../ui/${file}`, import.meta.url))); return;
+      res.end(assets.get(req.url!)); return;
     }
-    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.6", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
+    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.7", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
     if(closing&&req.method==='POST'&&req.url!=='/api/shutdown')return json(503,{error:'APP_SHUTTING_DOWN'});
     if (req.method === "POST" && ["/api/shutdown", "/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
       if (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "LOCAL_ONLY" });

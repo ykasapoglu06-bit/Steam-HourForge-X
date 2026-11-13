@@ -1,6 +1,27 @@
 import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
+
+const APP_VERSION='2.4.7';
+let versionMismatch=false;
+function showVersionError(){
+  versionMismatch=true;
+  document.body.replaceChildren();
+  const panel=document.createElement('main'),heading=document.createElement('h1'),message=document.createElement('p');
+  panel.className='shutdown-panel';heading.textContent=t('versionMismatchTitle');message.textContent=t('versionMismatchHelp');
+  const quit=document.createElement('button');quit.className='power-button';quit.textContent=t('quitApp');
+  quit.onclick=async()=>{
+    quit.disabled=true;
+    try{
+      const response=await fetch('/api/shutdown',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmed:true})});
+      if(!response.ok)throw new Error('SHUTDOWN_UNAVAILABLE');
+      heading.textContent=t('appClosing');message.textContent=t('appClosingHelp');
+    }catch{message.textContent=t('versionMismatchHelp')+' '+t('errors.SHUTDOWN_UNAVAILABLE');quit.disabled=false;}
+  };
+  panel.append(heading,message,quit);document.body.append(panel);
+}
+if(['shutdownApp','shutdownPanel','fixed','headline'].some(id=>!$(id))){showVersionError();throw new Error('UI_VERSION_MISMATCH');}
+
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let accounts=[],selectedName='',view='activity',filter='all',reachable=false,lastSuccess=0,profileResult=null,profileBusy=false,mutating=false,pollTask=null;
 let gameSignatures=new Map(),sidebarSignature='',accountSignature='',toastTimer,queueSignature='';
@@ -144,6 +165,7 @@ function renderAccounts(){
 }
 
 function render(){
+  if(versionMismatch)return;
   if(quitting){
     document.querySelectorAll('main>section,main>.view,main>footer').forEach(element=>element.hidden=true);
     show('connectionBanner',false);show('toast',false);show('shutdownPanel',true);
@@ -220,12 +242,12 @@ function render(){
   text('lastUpdate',lastSuccess?t('updated',{time:time(lastSuccess)}):'');tick();
 }
 
-function tick(){const a=current();if(!a)return;text('uptime',a.connectedSince?duration(Date.now()-new Date(a.connectedSince)):'—');text('countdown',a.isPaused?t('status.paused'):a.nextBatchAt?Math.max(0,Math.ceil((a.nextBatchAt-Date.now())/60000))+' '+t('min'):'—');text('qrTimer',a.qrExpiresAt?t('qrRemaining',{minutes:Math.max(0,Math.ceil((a.qrExpiresAt-Date.now())/60000))}):'');}
+function tick(){if(versionMismatch)return;const a=current();if(!a)return;text('uptime',a.connectedSince?duration(Date.now()-new Date(a.connectedSince)):'—');text('countdown',a.isPaused?t('status.paused'):a.nextBatchAt?Math.max(0,Math.ceil((a.nextBatchAt-Date.now())/60000))+' '+t('min'):'—');text('qrTimer',a.qrExpiresAt?t('qrRemaining',{minutes:Math.max(0,Math.ceil((a.qrExpiresAt-Date.now())/60000))}):'');}
 
 async function poll(){
-  if(quitting)return;
+  if(quitting||versionMismatch)return;
   if(pollTask)return pollTask;
-  pollTask=(async()=>{try{const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();accounts=data.accounts;reachable=true;lastSuccess=Date.now();if(!accounts.some(a=>a.name===selectedName))selectedName=accounts[0]?.name||'';render();}catch(error){console.error('Dashboard update failed',error);reachable=false;render();}finally{pollTask=null;}})();
+  pollTask=(async()=>{try{const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();if(data.version&&data.version!==APP_VERSION){showVersionError();return;}accounts=data.accounts;reachable=true;lastSuccess=Date.now();if(!accounts.some(a=>a.name===selectedName))selectedName=accounts[0]?.name||'';render();}catch(error){console.error('Dashboard update failed',error);reachable=false;render();}finally{pollTask=null;}})();
   return pollTask;
 }
 

@@ -29,6 +29,10 @@ Choose the games you want to prioritize, see what is being reported to Steam and
 | Profile shortcuts | Show Steam avatars, SteamID64, Steam2 ID and vanity paths; open Steam and five account-service sites. |
 | Local preferences | Remember account labels, priorities, rotation periods and language selection. |
 
+## Compact desktop and mobile interface
+
+All six views share a compact spacing system. On narrow screens, navigation stays at the bottom, account selection stays above the content, and cards, forms and dialogs adapt to a single column. The interface supports mobile browsers; the application remains a localhost dashboard. A public website or remote phone access is not configured by these layout changes.
+
 ## Get started on Windows
 
 The release download is a **source package**, not a standalone installer or bundled Node.js runtime.

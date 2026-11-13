@@ -1,6 +1,26 @@
 # Changelog / Değişiklikler
 
 
+## v2.4.7
+
+### English
+
+- Rebuilt shared spacing and responsive rules for Activity, Library, Find games, Full queue, Accounts and About; compacted sign-in and dialogs.
+- Narrow screens use bottom navigation, a compact language/header area, stacked forms/cards, readable inputs and safe-area spacing.
+- Three-account desktop sidebar has a guaranteed minimum list height; account cards use content-safe grids.
+- HTML/JS/CSS are snapshotted together on backend startup. Mismatched old pages show recovery guidance instead of crashing into a partial UI. Launcher warns when an older backend is still running.
+- 91 automated tests pass, including all-six-view navigation with three accounts and long names, version recovery and consistent assets. Windows build passes. Visual mobile browser verification was unavailable in this chat; no claim of device-level verification is made.
+- The dashboard remains localhost-only. Public hosting/remote login is not enabled.
+
+### Türkçe
+
+- Canlı durum, Kütüphane, Oyun bul, Tam sıralama, Hesaplar ve Hakkında için ortak boşluk ve duyarlı düzen yeniden kuruldu; giriş ve pencereler sıkılaştırıldı.
+- Dar ekranda alt gezinme, küçük dil/üst bilgi alanı, alt alta form/kartlar, okunabilir girdiler ve ekran güvenli alanı boşluğu kullanılır.
+- Masaüstünde üç hesap için sol listede en az yükseklik ayrıldı; hesap kartlarında içerik taşmasını önleyen sütunlar kullanılır.
+- HTML/JS/CSS arka uç açılırken birlikte belleğe alınır. Eski sayfa/sürüm karışıklığında eksik arayüz yerine kurtarma açıklaması gösterilir. Başlatıcı eski arka uç açıkken uyarır.
+- Üç hesap ve uzun adlarla altı sekme, sürüm kurtarma ve tutarlı dosya sunumu dahil 91 otomatik test başarılı. Windows derlemesi başarılı. Bu sohbette mobil tarayıcı görsel doğrulaması kullanılamadı; gerçek cihaz doğrulaması iddia edilmiyor.
+- Panel yalnızca yerel erişimde kalır. Herkese açık sunucu veya uzaktan giriş etkinleştirilmedi.
+
 ## v2.4.6
 
 ### English

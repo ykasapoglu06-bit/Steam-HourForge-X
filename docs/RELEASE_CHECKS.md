@@ -76,3 +76,7 @@ Project owner display name is Joseph-06. The existing Steam profile link is reta
 ### Türkçe
 
 Proje sahibi görünen adı Joseph-06 olarak değiştirildi. Mevcut Steam profil bağlantısı resmî Steam logosuyla korundu. Yeni slogan: “Oyunların. Senin kontrolünde.” Hakkında, giriş ve durum panellerindeki paragraf, başlık ve bölüm aralıkları daraltıldı. Düğme hedef boyutları korundu. 87 test ve Windows derlemesi başarılı; bu güncellemede tarayıcı üzerinden görsel doğrulama yapılamadı.
+
+## Version 2.4.7
+
+91 tests pass: six-view three-account navigation, long names, bilingual state, mismatched HTML/backend recovery and startup asset snapshot regression coverage. Windows TypeScript/native build passes; npm audit reports zero known vulnerabilities. Browser access unavailable for this chat; mobile layout is implemented and source/DOM checked, but no new visual/device pass is claimed. The older v2.4.2 runtime mismatch was observed directly before these changes.

@@ -1,6 +1,8 @@
 export const messages = {
   "en": {
     "tagline": "Your games. Your control.",
+    "versionMismatchTitle": "Restart Steam HourForge X",
+    "versionMismatchHelp": "The page and background app are from different versions. Quit the background app, open the Steam HourForge X shortcut again, then reload this page. Your saved accounts are kept.",
     "steamProfile": "Steam profile",
     "dashboard": "Activity",
     "library": "Library",
@@ -268,7 +270,7 @@ export const messages = {
     "aboutLimitsText": "Steam allows up to 32 games per account at once. Steam controls playtime credit and card eligibility. SAM needs Windows, the Steam desktop client and a matching account.",
     "aboutSource": "Source code",
     "aboutSourceText": "The source package includes setup scripts, tests and licenses. Your saved accounts, sign-in tokens and logs are excluded.",
-    "aboutVersion": "Version 2.4.6",
+    "aboutVersion": "Version 2.4.7",
     "aboutDocs": "Documentation",
     "aboutLocal": "Local dashboard",
     "projectOwner": "Project owner",
@@ -330,6 +332,8 @@ export const messages = {
   },
   "tr": {
     "tagline": "Oyunların. Senin kontrolünde.",
+    "versionMismatchTitle": "Steam HourForge X'i yeniden başlat",
+    "versionMismatchHelp": "Sayfa ile arka plandaki uygulama farklı sürümlerde. Arka plan uygulamasını kapatıp Steam HourForge X kısayolunu yeniden aç; ardından bu sayfayı yenile. Kayıtlı hesapların korunur.",
     "steamProfile": "Steam profili",
     "dashboard": "Canlı durum",
     "library": "Kütüphane",
@@ -597,7 +601,7 @@ export const messages = {
     "aboutLimitsText": "Steam hesap başına aynı anda en fazla 32 oyun kabul eder. Saat ve kart haklarını Steam belirler. SAM için Windows, Steam masaüstü istemcisi ve eşleşen hesap gerekir.",
     "aboutSource": "Kaynak kodu",
     "aboutSourceText": "Kaynak paketinde kurulum betikleri, testler ve lisans bilgileri bulunur. Kayıtlı hesapların, giriş anahtarların ve günlüklerin pakete eklenmez.",
-    "aboutVersion": "Sürüm 2.4.6",
+    "aboutVersion": "Sürüm 2.4.7",
     "aboutDocs": "Belgeler",
     "aboutLocal": "Yerel kontrol paneli",
     "projectOwner": "Proje sahibi",

@@ -3,6 +3,40 @@ import { readFileSync } from "node:fs";
 // @ts-expect-error jsdom types are only used in this test.
 import { JSDOM } from "jsdom";
 let dom:any;
+it('opens all six views with three accounts and long names without missing controls',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ const accounts=Array.from({length:3},(_,i)=>({name:'demo-'+i,label:'Uzun hesap etiketi '+i,displayName:'A long display name with Türkçe İ ı '+i,status:'farming',connectedSince:Date.now(),steamId:'7656119800000000'+i,mode:'hours',gamesPlaying:[620],library:[{appid:620,name:'Long game title '+i,playtimeMinutes:120}],priorityGames:[620],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[[620]],nextGames:[],manualGames:[],achievements:{}}));
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.7'})),setInterval:()=>0}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('accountCards').children.length).toBe(3));
+ for(const view of ['activity','library','discover','queue','accounts','about']){
+  dom.window.document.querySelector(`[data-view="${view}"]`).click();expect($(view+'View').hidden).toBe(false);
+  expect(dom.window.document.querySelector(`[data-view="${view}"]`).getAttribute('aria-current')).toBe('page');
+ }
+ for(const button of dom.window.document.querySelectorAll('[data-language]')){button.click();expect($('aboutView').textContent).toContain('Joseph-06');}
+ expect($('accountList').children.length).toBe(3);expect($('accountSelector').options.length).toBe(3);
+ $('settings').click();expect($('settingsDialog').open).toBe(true);expect($('editLabel').value).toContain('Uzun hesap');
+});
+it('replaces outdated HTML with readable recovery guidance instead of a partly blank app',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.document.getElementById('fixed').remove();
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await expect(import('../ui/app.js')).rejects.toThrow('UI_VERSION_MISMATCH');
+ expect(dom.window.document.body.textContent).toContain('yeniden başlat');expect(dom.window.document.body.textContent).toContain('Kayıtlı hesapların korunur');
+});
+it('stops polling and rendering after detecting incompatible backend versions',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ const intervals:Function[]=[],fetchMock=vi.fn(async()=>new Response('{"accounts":[],"version":"2.4.2"}'));
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:(fn:Function)=>{intervals.push(fn);return 0;}}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');await vi.waitFor(()=>expect(dom.window.document.body.textContent).toContain('farklı sürümlerde'));
+ for(const fn of intervals)await fn();expect(fetchMock).toHaveBeenCalledOnce();
+});
 it('quits the entire app once and stops polling when its server closes',async()=>{
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
  let closed=false;const calls:any[]=[];const clear=vi.fn();

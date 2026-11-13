@@ -7,7 +7,7 @@ import { createShutdown } from "./shutdown.js";
 import { stopSamHelpers } from "./sam.js";
 
 async function main(): Promise<void> {
-  log.info("Steam HourForge X 2.4.6 — Your games. Your control.");
+  log.info("Steam HourForge X 2.4.7 — Your games. Your control.");
   const config = loadConfig();
   const manager = new AccountManager(config);
   let shutdown!: ReturnType<typeof createShutdown>;
