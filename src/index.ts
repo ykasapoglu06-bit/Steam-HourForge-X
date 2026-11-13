@@ -5,7 +5,7 @@ import { log } from "./logger.js";
 import { startDashboard } from "./dashboard.js";
 
 async function main(): Promise<void> {
-  log.info("Steam HourForge X 2.4.1 — Your library. Your pace.");
+  log.info("Steam HourForge X 2.4.2 — Your library. Your pace.");
 
   const config = loadConfig();
   const manager = new AccountManager(config);

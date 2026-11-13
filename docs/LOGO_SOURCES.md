@@ -13,3 +13,4 @@ These assets are served locally. Account cards do not contact the linked service
 
 - SteamIDCheck: https://steamidcheck.com/favicon.svg (declared site favicon).
 - Project logo: image provided by project owner Yusuf Kasapoglu; copied unchanged to `ui/logo.png`. The Windows icon is a format/size conversion of that image.
+- Steam profile: https://store.steampowered.com/favicon.ico (official Steam store favicon, bundled as ui/logos/steam.ico).

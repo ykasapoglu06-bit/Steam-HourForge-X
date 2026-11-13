@@ -40,3 +40,7 @@ Cards-first runs one eligible game, shows the current game and remaining badge-p
 Account removal is available on account cards and in settings, with an account-specific confirmation. It clears saved sign-in and profile metadata after stopping the account, invalidates achievement previews, and saves the remaining list. Empty account lists survive restart. Tests cover removal cancellation, last-account removal, adding afterward, local Origin/confirmation requirements and blocking during native operations. A regression test also keeps the Steam profile display name separate from the login account name.
 
 Humanizer review updated both languages: account creation no longer promises QR-only login, sign-out copy covers password and QR methods, and account removal explains its local scope. Marketing-style headings and technical language in user flows were shortened. Localization keys and substitution placeholders are retained.
+
+## Version 2.4.2
+
+The Steam profile link is the first service tile on account cards, with the official Steam favicon and a stronger blue background. The former small identity-row link is removed. Tests verify order, account-specific URL, bundled icon, bilingual label and external-link isolation.

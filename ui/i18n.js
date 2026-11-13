@@ -1,6 +1,7 @@
 export const messages = {
   "en": {
     "tagline": "Your library. Your pace.",
+    "steamProfile": "Steam profile",
     "dashboard": "Activity",
     "library": "Library",
     "accounts": "Accounts",
@@ -248,7 +249,7 @@ export const messages = {
     "aboutLimitsText": "Steam allows up to 32 games per account at once. Steam controls playtime credit and card eligibility. SAM needs Windows, the Steam desktop client and a matching account.",
     "aboutSource": "Source code",
     "aboutSourceText": "The source package includes setup scripts, tests and licenses. Your saved accounts, sign-in tokens and logs are excluded.",
-    "aboutVersion": "Version 2.4.1",
+    "aboutVersion": "Version 2.4.2",
     "aboutDocs": "Documentation",
     "aboutLocal": "Local dashboard",
     "projectOwner": "Project owner",
@@ -310,6 +311,7 @@ export const messages = {
   },
   "tr": {
     "tagline": "Kütüphanen, senin ritmin.",
+    "steamProfile": "Steam profili",
     "dashboard": "Canlı durum",
     "library": "Kütüphane",
     "accounts": "Hesaplar",
@@ -557,7 +559,7 @@ export const messages = {
     "aboutLimitsText": "Steam hesap başına aynı anda en fazla 32 oyun kabul eder. Saat ve kart haklarını Steam belirler. SAM için Windows, Steam masaüstü istemcisi ve eşleşen hesap gerekir.",
     "aboutSource": "Kaynak kodu",
     "aboutSourceText": "Kaynak paketinde kurulum betikleri, testler ve lisans bilgileri bulunur. Kayıtlı hesapların, giriş anahtarların ve günlüklerin pakete eklenmez.",
-    "aboutVersion": "Sürüm 2.4.1",
+    "aboutVersion": "Sürüm 2.4.2",
     "aboutDocs": "Belgeler",
     "aboutLocal": "Yerel kontrol paneli",
     "projectOwner": "Proje sahibi",

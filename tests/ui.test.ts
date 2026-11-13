@@ -86,7 +86,11 @@ it("renders collapsed lists, priority selection, queue, achievements and sign-ou
   expect($('accountCards').textContent).toContain('SteamID64');expect($('accountCards').textContent).toContain('STEAM_0:0:19867136');expect($('accountCards').textContent).toContain('/id/yuu55uuf');
   const links=[...$('accountCards').querySelectorAll('a')].map((link:any)=>link.href);
   expect(links).toEqual([`https://steamcommunity.com/profiles/${a.steamId}/`,`https://vaclist.net/account/${a.steamId}`,`https://csrep.gg/player/${a.steamId}`,`https://csstats.gg/player/${a.steamId}`,`https://cswat.ch/stats/${a.steamId}`,`https://steamidcheck.com/profile/${a.steamId}`]);
-  expect($('accountCards').querySelectorAll('.service-link img')).toHaveLength(5);
+  expect($('accountCards').querySelectorAll('.service-link img')).toHaveLength(6);
+  const firstService=$('accountCards').querySelector('.service-link');
+  expect(firstService.textContent).toContain('Steam profili');
+  expect(firstService.querySelector('img').getAttribute('src')).toBe('/logos/steam.ico');
+  expect(firstService.rel).toContain('noopener');expect(firstService.target).toBe('_blank');
   dom.window.document.querySelector('[data-view="about"]').click();expect($('aboutView').hidden).toBe(false);expect($('hero').hidden).toBe(true);
   dom.window.document.querySelector('[data-language="en"]').click();expect(dom.window.document.querySelector('[data-language="en"]').getAttribute('aria-pressed')).toBe('true');
   expect($('aboutView').textContent).toContain('Your games and accounts in one place');expect($('aboutView').textContent).toContain('Yusuf Kasapoglu');

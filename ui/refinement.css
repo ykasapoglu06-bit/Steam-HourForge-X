@@ -1,4 +1,5 @@
 /* Layout, interaction states and sign-in workspace. */
+.service-link.steam-profile-link{background:#174361;border-color:#428ab5;color:#edf9ff;font-weight:650}.service-link.steam-profile-link:hover{background:#205577;border-color:#7ddcff}.service-link.steam-profile-link img{width:23px;height:23px;object-fit:contain}
 :root{--bg:#081422;--surface:#102336;--raised:#19344c;--line:#2b4359;--text:#edf5fc;--muted:#a8bacd;--accent:#58d5ff;--blue:#95cdff;--good:#8cd8b8;--warn:#ffb9a6}
 body{font-size:15px;line-height:1.6}
 .app-shell{grid-template-columns:248px minmax(0,1fr)}
