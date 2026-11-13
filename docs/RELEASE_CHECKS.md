@@ -44,3 +44,10 @@ Humanizer review updated both languages: account creation no longer promises QR-
 ## Version 2.4.2
 
 The Steam profile link is the first service tile on account cards, with the official Steam favicon and a stronger blue background. The former small identity-row link is removed. Tests verify order, account-specific URL, bundled icon, bilingual label and external-link isolation.
+
+## Version 2.4.3
+
+- Reviewed v2.3.0...v2.4.2 using Matt Pocock code-review, with separate Standards and Spec reviews.
+- Fixed sign-in/removal lifecycle interleavings, duplicate Steam username persistence, and the native achievement cooldown lock.
+- Added four regression tests; all 73 tests pass. Windows TypeScript/native bridge build passes; npm audit reports zero known vulnerabilities.
+- Tests use isolated fixtures and mocks. No real achievement writes were performed for this review.

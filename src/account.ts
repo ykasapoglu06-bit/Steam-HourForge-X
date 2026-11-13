@@ -281,10 +281,11 @@ export class SteamAccount extends EventEmitter {
     if(!this.state.steamId||!this.state.connectedSince||this.stopped)throw new Error('ACCOUNT_OFFLINE');
     if(!this.state.library.some(game=>game.appid===appid))throw new Error('SAM_NOT_OWNED');
     if(this.state.samBusy)throw new Error('REQUEST_BUSY');
+    this.state.samBusy=true;
+    try{
     if(this.steamBlocked&&Date.now()-this.samFinishedAt<3000){const until=Date.now()+3000;while(this.steamBlocked&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
     if(this.steamBlocked)throw new Error('SAM_GAME_RUNNING');
     const steamId=this.state.steamId,wasStarted=this.started,manualPaused=this.state.manualPaused;
-    this.state.samBusy=true;
     try{
       const disconnected=this.client.steamID?new Promise<void>((resolve,reject)=>{
         const done=()=>{clearTimeout(timer);resolve();};
@@ -299,9 +300,9 @@ export class SteamAccount extends EventEmitter {
       this.state.lastReportedAt=null;
       this.samFinishedAt=Date.now();
       this.state.manualPaused=manualPaused;this.state.isPaused=manualPaused;
-      try{if(wasStarted){await this.start();const until=Date.now()+10000;while(!this.state.connectedSince&&this.state.status==='connecting'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}}
-      finally{this.state.samBusy=false;this.refreshGames();}
+      if(wasStarted){await this.start();const until=Date.now()+10000;while(!this.state.connectedSince&&this.state.status==='connecting'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
     }
+    }finally{this.state.samBusy=false;this.refreshGames();}
   }
 
   async logout():Promise<void> {

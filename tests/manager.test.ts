@@ -7,6 +7,28 @@ import { AccountManager } from "../src/manager.js";
 import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 const folders: string[]=[];
+it('rejects duplicate Steam usernames before changing saved accounts',async()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'first',accountName:'Player',games:['ALL']},{name:'second',games:['ALL']}],settings:{dataDirectory:join(path,'data')}});
+ const manager=new AccountManager(config,file),begin=vi.spyOn(SteamAccount.prototype,'beginLogin').mockResolvedValue();
+ await expect(manager.login('second',{method:'credentials',accountName:' player ',password:'test'})).rejects.toThrow('ACCOUNT_LOGIN_EXISTS');
+ expect(begin).not.toHaveBeenCalled();expect(()=>ConfigSchema.parse(JSON.parse(readFileSync(file,'utf8')))).not.toThrow();
+});
+it('blocks removal while an admitted login is still changing account lifecycle',async()=>{
+ const path=folder(),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,join(path,'config.json'));
+ let release!:()=>void;vi.spyOn(SteamAccount.prototype,'beginLogin').mockImplementation(()=>new Promise<void>(resolve=>release=resolve));
+ const logout=vi.spyOn(SteamAccount.prototype,'logout').mockResolvedValue();
+ const login=manager.login('main',{method:'credentials',accountName:'player',password:'test'});
+ const removal=expect(manager.removeAccount('main')).rejects.toThrow('REQUEST_BUSY');
+ release();await login;await removal;expect(logout).not.toHaveBeenCalled();expect(manager.count).toBe(1);
+});
+it('reserves usernames across simultaneous sign-ins on different cards',async()=>{
+ const path=folder(),config=ConfigSchema.parse({accounts:[{name:'first',games:['ALL']},{name:'second',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,join(path,'config.json'));
+ let release!:()=>void;vi.spyOn(SteamAccount.prototype,'beginLogin').mockImplementation(()=>new Promise<void>(resolve=>{if(!release)release=resolve;else resolve();}));
+ const first=manager.login('first',{method:'credentials',accountName:'player',password:'test'});
+ const second=expect(manager.login('second',{method:'credentials',accountName:'PLAYER',password:'test'})).rejects.toThrow('ACCOUNT_LOGIN_EXISTS');
+ // Release the first attempt before checking both outcomes.
+ release();await Promise.all([first,second]);
+});
 it('remembers that a previously disconnected account was enabled by a new sign-in',async()=>{
  const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL'],enabled:false}],settings:{dataDirectory:join(path,'data')}});
  const manager=new AccountManager(config,file);vi.spyOn(SteamAccount.prototype,'beginLogin').mockResolvedValue();

@@ -74,6 +74,19 @@ describe("SteamAccount", () => {
     expect(account.getState().manualPaused).toBe(true);expect(account.getState().status).toBe('paused');
     expect(account.getState().achievements[730]?.unlocked).toBe(1);
   });
+  it('locks native handoff before waiting for the Steam cooldown',async()=>{
+    vi.useFakeTimers();
+    const config=ConfigSchema.parse({accounts:[{name:'cooldown',games:[730]}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+    Object.assign(internal.state,{steamId:'76561198000000000',connectedSince:new Date(),status:'farming',library:[{appid:730,name:'CS2',playtimeMinutes:0}]});
+    internal.steamBlocked=true;internal.samFinishedAt=Date.now();
+    vi.spyOn(internal.client,'gamesPlayed').mockImplementation(()=>{});
+    const operation=vi.fn(async()=>({unlocked:0,total:1}));
+    const first=account.desktopAchievements(730,operation);
+    const second=expect(account.desktopAchievements(730,operation)).rejects.toThrow('REQUEST_BUSY');
+    internal.steamBlocked=false;await vi.advanceTimersByTimeAsync(100);
+    await first;await second;expect(operation).toHaveBeenCalledOnce();expect(account.getState().samBusy).toBe(false);
+  });
   it("verifies a manually added app and includes it in the queue",async()=>{
     const config=ConfigSchema.parse({accounts:[{name:'manual',games:['ALL']}]});
     const account=new SteamAccount(config.accounts[0]!,config.settings);const client=(account as any).client;
