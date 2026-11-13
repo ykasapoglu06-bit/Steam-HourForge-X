@@ -1,0 +1,58 @@
+{
+  "name": "steam-hourforge-x",
+  "version": "2.3.0",
+  "description": "A local Steam playtime and card dashboard with priorities, multiple accounts and bilingual controls",
+  "author": "Steam HourForge X contributors",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "steam-hourforge-x": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "tsx watch --exclude data --exclude dist src/index.ts",
+    "build": "tsc && node scripts/build-native.cjs",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:native": "node scripts/build-native.cjs",
+    "package:source": "node scripts/package-source.cjs"
+  },
+  "keywords": [
+    "steam",
+    "hour-farming",
+    "idle",
+    "playtime"
+  ],
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "dotenv": "^16.4.5",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "steam-session": "^1.7.0",
+    "steam-totp": "^2.1.2",
+    "steam-user": "^5.2.1",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "adm-zip": "^0.6.1",
+    "protobufjs": "^7.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/steam-totp": "^2.1.0",
+    "@types/steam-user": "^5.1.1",
+    "jsdom": "^31.0.1",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

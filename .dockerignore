@@ -1,0 +1,15 @@
+node_modules
+dist
+data
+npm-debug.log
+.DS_Store
+.git
+.vscode
+.env
+.runtime
+config.json
+config.json.tmp
+artifacts
+outputs
+work
+*.zip

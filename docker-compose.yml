@@ -1,0 +1,9 @@
+services:
+  steam-hourforge-x:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:17321:17321"
+    volumes:
+      - ./data:/app/data
+
