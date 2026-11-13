@@ -1,0 +1,102 @@
+import { SteamAccount, type AccountState, type ClaimConflictCheck } from "./account.js";
+import { AccountSchema, AccountPreferencesSchema, type AppConfig, type AccountConfig } from "./config.js";
+import { log } from "./logger.js";
+import { writeFileSync, renameSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { SamService, runSam } from './sam.js';
+import { join } from 'node:path';
+
+export class AccountManager {
+  private sam:SamService;
+  private accounts: SteamAccount[] = [];
+  constructor(private config: AppConfig, private configPath = "config.json") {
+    this.sam=new SamService(runSam,Date.now,entry=>{
+      mkdirSync(config.settings.dataDirectory,{recursive:true});
+      appendFileSync(join(config.settings.dataDirectory,'achievement-actions.jsonl'),JSON.stringify(entry)+'\n');
+    });
+    for (const account of config.accounts) this.accounts.push(this.createAccount(account));
+    if(!existsSync(this.configPath))this.save();
+    log.info({ accounts: this.accounts.length }, "Accounts loaded");
+  }
+  private createAccount(config: AccountConfig): SteamAccount {
+    let account: SteamAccount;
+    const claimCheck: ClaimConflictCheck = (steamId, steamName) => {
+      for (const other of this.accounts) {
+        if (other === account) continue;
+        const state = other.getState();
+        if (["offline", "skipped", "error"].includes(state.status)) continue;
+        if (steamId && steamId === state.steamId) return state.label;
+      }
+      return null;
+    };
+    account = new SteamAccount(config, this.config.settings, claimCheck);
+    return account;
+  }
+  private save(): void {
+    writeFileSync(this.configPath + ".tmp", JSON.stringify(this.config, null, 2));
+    renameSync(this.configPath + ".tmp", this.configPath);
+  }
+  async startAll(): Promise<void> {
+    await Promise.all(this.accounts.filter(account => this.config.accounts.find(config => config.name === account.getState().name)?.enabled).map(account => account.start()));
+  }
+  async stopAll(): Promise<void> { await Promise.all(this.accounts.map(account => account.stop())); }
+  getStates(): Readonly<AccountState>[] { return this.accounts.map(account => account.getState()); }
+  private find(name: string): SteamAccount {
+    const account = this.accounts.find(item => item.getState().name === name);
+    if (!account) throw new Error("ACCOUNT_NOT_FOUND");
+    return account;
+  }
+  addAccount(label: string): string {
+    const parsed = AccountPreferencesSchema.shape.label.parse(label);
+    if (this.accounts.length >= 20) throw new Error("ACCOUNT_LIMIT");
+    if (this.accounts.some(account => account.getState().label.toLowerCase() === parsed.toLowerCase())) throw new Error("LABEL_EXISTS");
+    const config = AccountSchema.parse({ name: "account-" + randomUUID().slice(0, 8), label: parsed, games: ["ALL"], loginMethod: "qr", farmingMode: "hours" });
+    const account = this.createAccount(config);
+    this.config.accounts.push(config);
+    this.accounts.push(account);
+    this.save();
+    void account.start().catch(() => log.warn({ account: config.name }, "Could not start account"));
+    return config.name;
+  }
+  updatePreferences(name: string, input: unknown): void {
+    const preferences = AccountPreferencesSchema.parse(input);
+    if (this.accounts.some(account => account.getState().name !== name && account.getState().label.toLowerCase() === preferences.label.toLowerCase())) throw new Error("LABEL_EXISTS");
+    this.find(name).setPreferences(preferences);
+    this.save();
+  }
+  async lookupProfile(name: string, profile: string) { return this.find(name).lookupProfile(profile); }
+  async addGame(name:string,appid:number){await this.find(name).addGame(appid);this.save();}
+  async achievements(name:string,appid:number){return this.find(name).achievementsFor(appid);}
+  async previewAchievements(name:string,appid:number){return this.find(name).desktopAchievements(appid,steamId=>this.sam.preview(name,steamId,appid));}
+  async completeAchievements(name:string,appid:number,nonce:string,confirmed:boolean){return this.find(name).desktopAchievements(appid,steamId=>this.sam.complete(name,steamId,appid,nonce,confirmed));}
+  async control(name: string, action: string): Promise<void> {
+    if (name === "*") {
+      if (!["pause", "resume"].includes(action)) throw new Error("INVALID_ACTION");
+      for (const account of this.accounts) action === "pause" ? account.pause() : account.resume();
+      return;
+    }
+    const account = this.find(name);
+    const config = this.config.accounts.find(item => item.name === name)!;
+    if(['stop','logout','start'].includes(action)){
+      if(account.getState().samBusy)throw new Error('REQUEST_BUSY');
+      this.sam.invalidate(name);
+    }
+    switch (action) {
+      case "pause": account.pause(); break;
+      case "resume": account.resume(); break;
+      case "next": account.nextBatch(); break;
+      case "refreshCards": await account.checkCards(); break;
+      case "refreshLibrary": await account.refreshLibrary(); break;
+      case "stop": config.enabled = false; await account.stop(); this.save(); break;
+      case "logout": config.enabled = false; await account.logout(); this.save(); break;
+      case "start":
+        if(!['offline','error','skipped'].includes(account.getState().status))return;
+        await account.stop();config.enabled = true; this.save();
+        void account.start().catch(() => log.warn({ account: name }, "Could not start account")); break;
+      case "hours": case "cards": account.setMode(action); this.save(); break;
+      default: throw new Error("INVALID_ACTION");
+    }
+  }
+  onStateChange(handler: (state: AccountState) => void): void { for (const account of this.accounts) account.on("stateChange", handler); }
+  get count(): number { return this.accounts.length; }
+}
