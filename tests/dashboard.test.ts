@@ -2,6 +2,23 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 import { startDashboard } from "../src/dashboard.js";
 let server: Server;
+it('requires local confirmed shutdown, rejects new work and calls shutdown once',async()=>{
+ const quit=vi.fn(),control=vi.fn();server=await startDashboard({getStates:()=>[],control} as any,0,quit);
+ const url=`http://127.0.0.1:${(server.address() as any).port}`;
+ const post=(path:string,body:unknown,origin=url)=>fetch(url+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ expect((await post('/api/shutdown',{confirmed:true},'https://example.com')).status).toBe(403);
+ expect((await post('/api/shutdown',{})).status).toBe(400);expect(quit).not.toHaveBeenCalled();
+ expect((await post('/api/shutdown',{confirmed:true})).status).toBe(202);
+ expect((await post('/api/shutdown',{confirmed:true})).status).toBe(202);
+ expect((await post('/api/control',{name:'main',action:'start'})).status).toBe(503);expect(control).not.toHaveBeenCalled();
+ await vi.waitFor(()=>expect(quit).toHaveBeenCalledOnce());
+});
+it('does not interrupt an in-progress native achievement operation',async()=>{
+ const quit=vi.fn();server=await startDashboard({getStates:()=>[{samBusy:true}]} as any,0,quit);
+ const url=`http://127.0.0.1:${(server.address() as any).port}`;
+ expect((await fetch(url+'/api/shutdown',{method:'POST',headers:{Origin:url,'Content-Type':'application/json'},body:'{"confirmed":true}'})).status).toBe(409);
+ expect(quit).not.toHaveBeenCalled();
+});
 it('requires local origin and explicit confirmation before removing a local account',async()=>{
  const manager={getStates:()=>[],removeAccount:vi.fn()};server=await startDashboard(manager as any,0);const url=`http://127.0.0.1:${(server.address() as any).port}`;
  const post=(origin:string,confirmed?:boolean)=>fetch(url+'/api/remove-account',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'test',confirmed})});

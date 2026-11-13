@@ -54,6 +54,14 @@ npm start
 
 İlk açılışta kişisel `.env` veya `config.json` gerekmez. Elle yapılandırma için `config.example.json` dosyasını örnek alabilirsin.
 
+## Yalnızca seçtiğin oyunları açık tut
+
+**Kütüphane** bölümünde istediğin oyunlara yıldız ver; canlı durum sayfasında **Yalnızca seçtiklerim** modunu seç. Tek yıldız yalnızca bir oyunu, birkaç yıldız yalnızca o oyunları açık tutar; en fazla 32 oyun seçebilirsin. Bu modda grup sırası değişmez ve kart önceliği uygulanmaz. Seçim boşsa oyun bildirilmez. Diğer sıralara dönmek için Önce saat veya Önce kart seç.
+
+## Programı tamamen kapat
+
+**Hepsini sürdür** yanındaki kırmızı güç simgeli **Programı kapat** düğmesini kullan. Tüm hesap işlemleri durur, yerel sunucu ve arka plandaki uygulama kapanır; hesaplar, kayıtlı girişler ve tercihler korunur. Sayfa kapanıyor/kapandı durumunu gösterir; tarayıcı sekmesini kendin kapatabilirsin. Tekrar kullanmak için uygulama kısayolunu aç. Yerel başarım işlemi sürerken kapatma geçici olarak kullanılamaz.
+
 ## Giriş ve kayıtlı hesaplar
 
 Herkese görünen profil adından farklı olabilen gerçek **Steam hesap adını** kullan. Steam Guard olmayan hesaplar yalnızca şifreyle giriş yapabilir. Steam e-posta kodu, doğrulayıcı kodu veya onay isterse ilgili adımı panelde ya da Steam uygulamasında tamamla. QR koduyla giriş de bir seçenektir.

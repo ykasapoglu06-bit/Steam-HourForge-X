@@ -6,6 +6,7 @@ let accounts=[],selectedName='',view='activity',filter='all',reachable=false,las
 let gameSignatures=new Map(),sidebarSignature='',accountSignature='',toastTimer,queueSignature='';
 const achievementBusy=new Set(),achievementErrors=new Map();
 let samPreview=null,samWriting=false;
+let quitting=false,appClosed=false,shutdownPollTimer=null;
 let loginMethod='credentials',loginPending=false,loginLocalError='',loginAccount='',loginLastPhase='';
 try { selectedName=localStorage.getItem('steam-hourforge-x.account')||''; } catch {}
 const current = () => accounts.find(account=>account.name===selectedName)||accounts[0];
@@ -46,7 +47,7 @@ async function mutate(operation,successKey){
 
 async function command(action,name=current()?.name){
   if(!name)return;
-  await mutate(()=>request('/api/control',{name,action}),action==='logout'?'loggedOut':['hours','cards'].includes(action)?'switched':action==='refreshLibrary'?'libraryRefreshed':null);
+  await mutate(()=>request('/api/control',{name,action}),action==='logout'?'loggedOut':['hours','cards','fixed'].includes(action)?'switched':action==='refreshLibrary'?'libraryRefreshed':null);
 }
 
 function selectAccount(name){
@@ -143,6 +144,17 @@ function renderAccounts(){
 }
 
 function render(){
+  if(quitting){
+    document.querySelectorAll('main>section,main>.view,main>footer').forEach(element=>element.hidden=true);
+    show('connectionBanner',false);show('toast',false);show('shutdownPanel',true);
+    text('shutdownTitle',t(appClosed?'appClosed':'appClosing'));
+    text('shutdownMessage',t(appClosed?'appClosedHelp':'appClosingHelp'));
+    document.querySelectorAll('button,input,select').forEach(element=>element.disabled=true);
+    return;
+  }
+  show('shutdownPanel',false);
+  $('shutdownApp').disabled=mutating||loginPending||!reachable||accounts.some(account=>account.samBusy);
+  $('shutdownApp').title=t(accounts.some(account=>account.samBusy)?'quitBusyHelp':'quitHelp');
   const a=current();
   document.querySelectorAll('[data-view]').forEach(button=>{button.classList.toggle('selected',button.dataset.view===view);button.setAttribute('aria-current',button.dataset.view===view?'page':'false');});
   for(const name of ['activity','library','discover','accounts','queue','about'])show(name+'View',view===name);
@@ -158,9 +170,10 @@ function render(){
   text('accountLabel',a.label);const running=reachable&&a.status==='farming'&&!a.isPaused,cardActive=a.mode==='cards'&&a.cardQueue.length>0;
   text('statusLabel',reachable?status(a):t('status.offline'));
   $('stateChip').classList.toggle('warning',!running);
-  text('headline',!reachable?t('stoppedTitle'):running?t(cardActive?'workingCards':'workingHours'):a.status==='paused'?t('pausedTitle'):a.status==='offline'?t('stoppedTitle'):a.status==='connecting'||a.status==='online'?t('connectionTitle'):status(a));
+  text('headline',!reachable?t('stoppedTitle'):running?t(a.mode==='fixed'?'workingFixed':cardActive?'workingCards':'workingHours'):a.status==='paused'?t('pausedTitle'):a.status==='offline'?t('stoppedTitle'):a.status==='connecting'||a.status==='online'?t('connectionTitle'):status(a));
   const cardName=a.cardQueue[0]?.name||'';
   text('description',!reachable?t('offlineBanner'):running?cardActive?t('cardsSummary',{game:cardName}):t('prioritySummary',{pinned:a.priorityGames.length,rest:Math.max(0,a.library.length-a.priorityGames.length)}):a.status==='paused'?t(a.manualPaused?'manualPause':'steamPause'):a.qrCode?t('qrHelp'):t('connectIssue'));
+  if(a.mode==='fixed'&&running)text('description',t(a.priorityGames.length?'fixedSummary':'fixedEmpty',{count:a.priorityGames.length}));
   if(a.samBusy)text('description',t(a.manualPaused?'samPausePending':'samBusy'));
   if(a.samBusy)text('headline',t('achievementOperation'));
   text('pause',t(a.manualPaused?'resume':'pause'));$('pause').disabled=mutating||!reachable||(!a.samBusy&&!['farming','paused'].includes(a.status));
@@ -176,14 +189,14 @@ function render(){
   const qs=JSON.stringify([a.name,a.queue,a.library.map(g=>g.name),language]);
   if(qs!==queueSignature){queueSignature=qs;$('fullQueue').innerHTML=(a.queue||[]).map((group,index)=>`<details class="queue-group"><summary>${escape(index===0?t('nowPlaying'):index===1?t('upNext'):t('queueGroup',{number:index+1}))} <span>${group.length}</span></summary><ol>${group.map(id=>`<li>${escape(a.library.find(g=>g.appid===id)?.name||id)} ${a.priorityGames.includes(id)?'★':''}</li>`).join('')}</ol></details>`).join('')||`<p class="empty">${escape(t('noGames'))}</p>`;}
   $('priorityChips').innerHTML=a.priorityGames.length?a.priorityGames.map(id=>{const g=a.library.find(game=>game.appid===id);return `<button data-show-pin="${id}">★ ${escape(g?.name||id)}</button>`}).join(''):`<p class="empty">${escape(t('prioritiesEmpty'))}</p>`;
-  show('fullPins',a.priorityGames.length>=32);
+  show('fullPins',a.mode!=='fixed'&&a.priorityGames.length>=32);
   show('cardFocus',view==='activity'&&a.mode==='cards'&&!needsLogin);
   text('cardCurrent',a.cardQueue[0]?.name||t(a.cardStatus==='checking'?'checkingCards':'cardFinished'));
   text('cardFocusInfo',a.cardQueue.length?t('cardFocusInfo',{remaining:a.cardQueue[0].remaining,games:a.cardQueue.length,drops:a.cardSessionDrops||0}):t('cardFallback'));
   text('cardChecked',a.cardCheckedAt?t('checked',{time:time(a.cardCheckedAt)}):t('waitingCards'));
   $('cardBadgeLink').href=a.cardQueue[0]?`https://steamcommunity.com/profiles/${a.steamId}/gamecards/${a.cardQueue[0].appid}/`:'https://steamcommunity.com/my/badges/';
-  for(const mode of ['hours','cards']){$(mode).setAttribute('aria-pressed',a.mode===mode);$(mode).disabled=mutating||!reachable;}
-  text('modeHelp',t(a.mode==='hours'?'hoursHelp':'cardsHelp'));
+  for(const mode of ['hours','cards','fixed']){$(mode).setAttribute('aria-pressed',a.mode===mode);$(mode).disabled=mutating||!reachable;}
+  text('modeHelp',t(a.mode==='fixed'?(a.priorityGames.length?'fixedHelp':'fixedEmpty'):a.mode==='hours'?'hoursHelp':'cardsHelp'));
   text('batch',cardActive?`1 / ${a.cardQueue.length}`:a.batchCount?`${a.batchIndex+1} / ${a.batchCount}`:'—');text('lastReport',time(a.lastReportedAt));
   $('next').disabled=mutating||!running||cardActive||a.batchCount<=1;
   text('cardInfo',a.cardStatus==='checking'?t('checkingCards'):a.cardStatus==='error'?t('cardScanFailed'):a.cardCheckedAt?t('cardSummary',{games:a.cardQueue.length,cards:a.cardQueue.reduce((sum,g)=>sum+g.remaining,0)})+' '+t('checked',{time:time(a.cardCheckedAt)}):t('waitingCards'));
@@ -210,6 +223,7 @@ function render(){
 function tick(){const a=current();if(!a)return;text('uptime',a.connectedSince?duration(Date.now()-new Date(a.connectedSince)):'—');text('countdown',a.isPaused?t('status.paused'):a.nextBatchAt?Math.max(0,Math.ceil((a.nextBatchAt-Date.now())/60000))+' '+t('min'):'—');text('qrTimer',a.qrExpiresAt?t('qrRemaining',{minutes:Math.max(0,Math.ceil((a.qrExpiresAt-Date.now())/60000))}):'');}
 
 async function poll(){
+  if(quitting)return;
   if(pollTask)return pollTask;
   pollTask=(async()=>{try{const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();accounts=data.accounts;reachable=true;lastSuccess=Date.now();if(!accounts.some(a=>a.name===selectedName))selectedName=accounts[0]?.name||'';render();}catch(error){console.error('Dashboard update failed',error);reachable=false;render();}finally{pollTask=null;}})();
   return pollTask;
@@ -274,7 +288,7 @@ $('logout').onclick=()=>{if(confirm(t('logoutConfirm')))void command('logout');}
 for(const id of ['activeDetails','libraryDetails','profileDetails'])$(id).addEventListener('toggle',render);
 $('pause').onclick=()=>command(current()?.manualPaused?'resume':'pause');
 $('connect').onclick=()=>{const a=current();if(!a)return;const action=['offline','error','skipped'].includes(a.status)?'start':'stop';if(action==='stop'&&!confirm(t('stopConfirm')))return;void command(action);};
-$('next').onclick=()=>command('next');$('hours').onclick=()=>command('hours');$('cards').onclick=()=>command('cards');
+$('next').onclick=()=>command('next');$('hours').onclick=()=>command('hours');$('cards').onclick=()=>command('cards');$('fixed').onclick=()=>command('fixed');
 $('refreshCards').onclick=()=>command('refreshCards');$('refreshLibrary').onclick=()=>command('refreshLibrary');
 $('scanAll').onclick=async()=>{await command('refreshLibrary');filter='all';setView('library');};
 $('pauseAll').onclick=()=>command('pause','*');$('resumeAll').onclick=()=>command('resume','*');
@@ -319,7 +333,27 @@ $('gameForm').onsubmit=async event=>{
   try{await request('/api/games',{name:a.name,appid});await poll();$('gameInput').value='';toast(t('gameAdded'));}
   catch(error){text('gameError',errorMessage(error));}finally{event.submitter.disabled=false;}
 };
-translate();poll();setInterval(poll,3000);setInterval(tick,1000);
+translate();poll();const pollTimer=setInterval(poll,3000),tickTimer=setInterval(tick,1000);
+async function checkShutdown(){
+  try{
+    await fetch('/api/status',{cache:'no-store',signal:AbortSignal.timeout(2000)});
+    shutdownPollTimer=setTimeout(checkShutdown,300);
+  }catch(error){
+    if(error.name==='TimeoutError'||error.name==='AbortError'){shutdownPollTimer=setTimeout(checkShutdown,500);return;}
+    appClosed=true;shutdownPollTimer=null;render();
+  }
+}
+$('shutdownApp').onclick=async()=>{
+  if(quitting||mutating||loginPending||accounts.some(account=>account.samBusy))return;
+  const controls=[...document.querySelectorAll('button,input,select')].map(element=>[element,element.disabled]);
+  quitting=true;render();
+  try{
+    await request('/api/shutdown',{confirmed:true});
+    clearInterval(pollTimer);clearInterval(tickTimer);clearTimeout(toastTimer);
+    $('steamPassword').value='';$('guardCode').value='';
+    await checkShutdown();
+  }catch(error){quitting=false;for(const [element,disabled] of controls)element.disabled=disabled;render();toast(errorMessage(error),true);}
+};
 
 async function previewCompletion(appid){
   const a=current();if(!a||samWriting)return;

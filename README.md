@@ -54,6 +54,14 @@ npm start
 
 A personal `.env` or `config.json` is not needed for the first launch. Use `config.example.json` as a reference for manual configuration.
 
+## Keep only selected games running
+
+In **Library**, star the games you want, then choose **Selected only** on the activity page. One star keeps a single game running; several stars keep only that set running, up to 32 games. There is no group rotation or card priority in this mode. An empty selection reports no game. Switch to Hours first or Cards first to return to those queues.
+
+## Close the entire app
+
+Use the red **Quit app** power button beside **Resume all**. It stops all account tasks, closes the local server and exits the background application, keeping saved accounts, sessions and preferences. The page shows closing/closed feedback; close the browser tab yourself. Open the application shortcut to return. Quitting is temporarily unavailable during a native achievement operation.
+
 ## Sign-in and saved accounts
 
 Use the actual **Steam account name**, which can differ from the public profile name. Accounts without Steam Guard can sign in with their password alone. If Steam requests an email code, authenticator code or approval, complete that step in the dashboard or Steam app. QR sign-in is an alternative.

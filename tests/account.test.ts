@@ -23,6 +23,18 @@ import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 
 describe("SteamAccount", () => {
+  it('keeps only selected games running without rotation and waits on an empty selection',()=>{
+    const config=ConfigSchema.parse({accounts:[{name:'fixed',games:['ALL'],priorityGames:[730],farmingMode:'fixed'}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+    Object.assign(internal.state,{status:'farming',connectedSince:new Date(),library:[{appid:730,name:'One'},{appid:440,name:'Two'}],cardQueue:[{appid:440,name:'Card game',remaining:2}]});
+    internal.allGames=[730,440,620];internal.batchStartedAt=0;
+    const report=vi.spyOn(internal.client,'gamesPlayed').mockImplementation(()=>{});
+    internal.refreshGames();expect(report).toHaveBeenLastCalledWith([730]);expect(internal.state.queue).toEqual([[730]]);expect(internal.state.nextBatchAt).toBeNull();expect(internal.state.nextGames).toEqual([]);
+    expect(()=>account.nextBatch()).toThrow('FIXED_MODE_NO_ROTATION');
+    account.setPreferences({label:'Fixed',priorityGames:[730,440],rotationMinutes:5});expect(report).toHaveBeenLastCalledWith([730,440]);
+    account.setPreferences({label:'Fixed',priorityGames:[],rotationMinutes:5});expect(report).toHaveBeenLastCalledWith([]);expect(internal.state.queue).toEqual([]);
+    expect(config.accounts[0]!.farmingMode).toBe('fixed');
+  });
   it.each([false,true])('keeps the latest pause preference during native handoff (initial %s)',async(initial)=>{
     const config=ConfigSchema.parse({accounts:[{name:'pause-handoff',games:[730]}]});
     const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;

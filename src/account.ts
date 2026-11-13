@@ -48,7 +48,7 @@ export interface AccountState {
   isPaused: boolean;
   lastError: string | null;
   connectedSince: Date | null;
-  mode: "hours" | "cards";
+  mode: "hours" | "cards" | "fixed";
   manualPaused: boolean;
   library: { appid: number; name: string; playtimeMinutes: number }[];
   cardStatus: "waiting" | "checking" | "ready" | "error";
@@ -103,6 +103,7 @@ export class SteamAccount extends EventEmitter {
   private scanningCards = false;
   private lastCardAttempt = 0;
   private stopped = false;
+  private shuttingDown = false;
   private started = false;
   private authAbort: AbortController | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -305,7 +306,7 @@ export class SteamAccount extends EventEmitter {
       this.state.lastReportedAt=null;
       this.samFinishedAt=Date.now();
       this.state.isPaused=this.state.manualPaused||this.steamBlocked;
-      if(wasStarted){await this.start();const until=Date.now()+10000;while(!this.state.connectedSince&&this.state.status==='connecting'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
+      if(wasStarted&&!this.shuttingDown){await this.start();const until=Date.now()+10000;while(!this.state.connectedSince&&this.state.status==='connecting'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
     }
     }finally{this.state.samBusy=false;this.refreshGames();}
   }
@@ -334,7 +335,7 @@ export class SteamAccount extends EventEmitter {
     return { steamId, games: library.apps.map(game => ({ appid: game.appid, name: game.name || `App ${game.appid}`, playtimeMinutes: game.playtime_forever ?? 0, owned: this.allGames.includes(game.appid) })) };
   }
 
-  setMode(mode: "hours" | "cards"): void {
+  setMode(mode: "hours" | "cards" | "fixed"): void {
     this.state.mode = mode;
     this.config.farmingMode = mode;
     if (mode === "cards") void this.checkCards();
@@ -360,6 +361,7 @@ export class SteamAccount extends EventEmitter {
   }
 
   nextBatch(): void {
+    if(this.state.mode==='fixed')throw new Error('FIXED_MODE_NO_ROTATION');
     if (this.state.mode !== "hours"&&this.state.cardQueue.length) throw new Error("Kartlar bitene kadar mevcut oyun açık kalır.");
     this.batchIndex++;
     this.batchStartedAt = Date.now();
@@ -394,6 +396,7 @@ export class SteamAccount extends EventEmitter {
   }
 
   async start(): Promise<void> {
+    if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
     if (this.started) return;
     if(this.isAuthenticating)throw new Error('REQUEST_BUSY');
     this.started = true;
@@ -408,6 +411,11 @@ export class SteamAccount extends EventEmitter {
     if (this.wasSkipped || this.stopped) { this.started = false; return; }
     this.logOnTimer = setInterval(() => this.logOn(), this.settings.logOnIntervalMs);
     this.refreshTimer = setInterval(() => this.refreshGames(), this.settings.refreshGamesIntervalMs);
+  }
+
+  async shutdown():Promise<void>{
+    this.shuttingDown=true;
+    await this.stop();
   }
 
   async stop(options:{preservePause?:boolean}={}): Promise<void> {
@@ -651,7 +659,8 @@ export class SteamAccount extends EventEmitter {
   }
 
   private refreshGames(): void {
-    const count = batchCount(this.allGames, this.state.priorityGames);
+    const fixed=this.state.mode==='fixed';
+    const count = fixed?(this.state.priorityGames.length?1:0):batchCount(this.allGames, this.state.priorityGames);
     const rotationMs = this.state.rotationMinutes * 60_000;
     const cardActive = this.state.mode === "cards" && this.state.cardQueue.length > 0;
     const canReport = this.state.status === "farming" && Boolean(this.state.connectedSince) && !this.stopped && !this.state.isPaused && !this.state.samBusy;
@@ -661,7 +670,8 @@ export class SteamAccount extends EventEmitter {
       this.batchStartedAt = Date.now();
       this.log.info({ games: this.state.gamesPlaying }, "Switched to next game batch");
     }
-    if (this.allGames.length) this.state.gamesPlaying = gameBatch(this.allGames, this.batchIndex, this.state.priorityGames);
+    if(fixed)this.state.gamesPlaying=[...this.state.priorityGames];
+    else if (this.allGames.length) this.state.gamesPlaying = gameBatch(this.allGames, this.batchIndex, this.state.priorityGames);
     if (this.state.mode === "cards" && this.state.cardQueue.length) {
       this.state.gamesPlaying = [this.state.cardQueue[0]!.appid];
     }
@@ -670,7 +680,7 @@ export class SteamAccount extends EventEmitter {
     this.state.batchCount = count;
     this.state.batchIndex = this.state.batchCount ? this.batchIndex % this.state.batchCount : 0;
     this.state.nextBatchAt = !cardActive && count > 1 ? this.batchStartedAt + rotationMs : null;
-    this.state.queue = cardActive ? this.state.cardQueue.map(game=>[game.appid]) : Array.from({length:count},(_,index)=>gameBatch(this.allGames,this.batchIndex+index,this.state.priorityGames));
+    this.state.queue = fixed ? (this.state.priorityGames.length?[[...this.state.priorityGames]]:[]) : cardActive ? this.state.cardQueue.map(game=>[game.appid]) : Array.from({length:count},(_,index)=>gameBatch(this.allGames,this.batchIndex+index,this.state.priorityGames));
     this.state.nextGames = this.state.queue.length>1 ? this.state.queue[1]! : [];
     if (!canReport) return;
     if(this.state.lastReportedAt && Date.now()-this.state.lastReportedAt<30_000 && JSON.stringify(this.lastSentGames)===JSON.stringify(this.state.gamesPlaying))return;

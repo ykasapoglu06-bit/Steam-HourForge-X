@@ -11,6 +11,7 @@ export class AccountManager {
   private accounts: SteamAccount[] = [];
   private lifecycleBusy=new Set<string>();
   private pendingLogins=new Map<string,string>();
+  private shuttingDown=false;
   constructor(private config: AppConfig, private configPath = "config.json") {
     this.sam=new SamService(runSam,Date.now,entry=>{
       mkdirSync(config.settings.dataDirectory,{recursive:true});
@@ -40,17 +41,24 @@ export class AccountManager {
     renameSync(this.configPath + ".tmp", this.configPath);
   }
   async startAll(): Promise<void> {
+    if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
     await Promise.all(this.accounts.filter(account => this.config.accounts.find(config => config.name === account.getState().name)?.enabled).map(account => account.start()));
   }
-  async stopAll(): Promise<void> { await Promise.all(this.accounts.map(account => account.stop())); }
+  async stopAll(): Promise<void> {
+    this.shuttingDown=true;
+    const results=await Promise.allSettled(this.accounts.map(account=>account.shutdown()));
+    if(results.some(result=>result.status==='rejected'))throw new Error('ACCOUNT_SHUTDOWN_FAILED');
+  }
   getStates(): Readonly<AccountState>[] { return this.accounts.map(account => account.getState()); }
   private find(name: string): SteamAccount {
+    if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
     if(this.lifecycleBusy.has(name))throw new Error('REQUEST_BUSY');
     const account = this.accounts.find(item => item.getState().name === name);
     if (!account) throw new Error("ACCOUNT_NOT_FOUND");
     return account;
   }
   addAccount(label: string): string {
+    if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
     const parsed = AccountPreferencesSchema.shape.label.parse(label);
     if (this.accounts.length >= 20) throw new Error("ACCOUNT_LIMIT");
     if (this.accounts.some(account => account.getState().label.toLowerCase() === parsed.toLowerCase())) throw new Error("LABEL_EXISTS");
@@ -113,6 +121,7 @@ export class AccountManager {
   async previewAchievements(name:string,appid:number){return this.find(name).desktopAchievements(appid,steamId=>this.sam.preview(name,steamId,appid));}
   async completeAchievements(name:string,appid:number,nonce:string,confirmed:boolean,ids?:string[]){return this.find(name).desktopAchievements(appid,steamId=>this.sam.complete(name,steamId,appid,nonce,confirmed,ids));}
   async control(name: string, action: string): Promise<void> {
+    if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
     if (name === "*") {
       if (!["pause", "resume"].includes(action)) throw new Error("INVALID_ACTION");
       for (const account of this.accounts) action === "pause" ? account.pause() : account.resume();
@@ -139,7 +148,7 @@ export class AccountManager {
         if(!['offline','error','skipped'].includes(account.getState().status))return;
         await account.stop();config.enabled = true; this.save();
         void account.start().catch(() => log.warn({ account: name }, "Could not start account")); break;
-      case "hours": case "cards": account.setMode(action); this.save(); break;
+      case "hours": case "cards": case "fixed": account.setMode(action); this.save(); break;
       default: throw new Error("INVALID_ACTION");
     }
     }finally{if(lifecycleAction)this.lifecycleBusy.delete(name);}

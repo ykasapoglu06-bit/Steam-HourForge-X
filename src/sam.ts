@@ -3,6 +3,16 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import type { ChildProcess } from 'node:child_process';
+
+const activeHelpers=new Set<ChildProcess>();
+export async function stopSamHelpers():Promise<void>{
+  await Promise.all([...activeHelpers].map(child=>new Promise<void>(resolve=>{
+    const timer=setTimeout(resolve,2000);
+    child.once('close',()=>{clearTimeout(timer);resolve();});
+    child.kill();
+  })));
+}
 
 const Row=z.object({id:z.string().min(1).max(1024),name:z.string().max(2000),unlocked:z.boolean()});
 const Result=z.object({steamId:z.string().regex(/^\d{17}$/),appid:z.number().int().positive(),unlocked:z.number().int().nonnegative(),total:z.number().int().min(0).max(10000),achievements:z.array(Row).max(10000),completed:z.number().int().nonnegative().optional(),rejected:z.number().int().nonnegative().optional(),stored:z.boolean().optional()});
@@ -26,6 +36,7 @@ export async function runSam(request:SamRequest):Promise<SamResult>{
         resolve(Result.parse(response));
       }catch{reject(new Error('SAM_UNAVAILABLE'));}
     });
+    activeHelpers.add(child);child.once('close',()=>activeHelpers.delete(child));
     child.stdin?.on('error',()=>{});
     child.stdin?.end(JSON.stringify(request));
   });

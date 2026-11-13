@@ -60,3 +60,9 @@ The Steam profile link is the first service tile on account cards, with the offi
 - UI/UX Pro Max review: disable conflicting account actions during handoff, explain waiting and saved pause, localize navigation, improve small-screen targets and keep keyboard focus after login-tab requests.
 - 80 mock/fixture tests pass; Windows native bridge build passes; no live achievement writes.
 - Browser fixture checks: 375x812, 812x375 and desktop; no horizontal overflow; TR/EN labels and arrow/Home keyboard login navigation verified.
+
+## Version 2.4.5
+
+- 87 tests cover guarded/idempotent shutdown, bounded cleanup, all-account stopping with saved configuration preserved, closed UI state, and selected-only non-rotating queues.
+- Windows TypeScript/native bridge build passed. No real achievement writes or real account shutdown performed.
+- Browser tool unavailable for this chat; isolated process shutdown/reopen command rejected by automatic approval review. These checks remain unverified; unit/API/DOM checks passed.

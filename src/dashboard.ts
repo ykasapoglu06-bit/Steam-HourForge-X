@@ -2,7 +2,8 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import type { AccountManager } from "./manager.js";
 
-export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard" | "removeAccount">, port = 17321) {
+export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard" | "removeAccount">, port = 17321, onShutdown?: () => void) {
+  let closing=false;
   const html = readFileSync(new URL("../ui/index.html", import.meta.url));
   const server = createServer(async (req, res) => {
     const address = server.address();
@@ -23,13 +24,24 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
       res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
       res.end(readFileSync(new URL(`../ui/${file}`, import.meta.url))); return;
     }
-    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.4", serverTime: Date.now(), accounts: manager.getStates() });
-    if (req.method === "POST" && ["/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
+    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.5", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
+    if(closing&&req.method==='POST'&&req.url!=='/api/shutdown')return json(503,{error:'APP_SHUTTING_DOWN'});
+    if (req.method === "POST" && ["/api/shutdown", "/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
       if (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "LOCAL_ONLY" });
       try {
         let body = "";
         for await (const part of req) { body += part; if (body.length > 8192) return json(413, { error: "REQUEST_TOO_LARGE" }); }
         const data = JSON.parse(body);
+        if(req.url==='/api/shutdown'){
+          if(data?.confirmed!==true)return json(400,{error:'SHUTDOWN_CONFIRMATION_REQUIRED'});
+          if(!onShutdown)return json(503,{error:'SHUTDOWN_UNAVAILABLE'});
+          if(!closing){
+            if(manager.getStates().some(account=>account.samBusy))return json(409,{error:'REQUEST_BUSY'});
+            closing=true;
+            res.once('finish',()=>{setTimeout(onShutdown,100);});
+          }
+          return json(202,{ok:true});
+        }
         if (req.url === "/api/accounts") {
           if (typeof data.label !== "string") return json(400, { error: "INVALID_SETTINGS" });
           return json(201, { ok: true, name: manager.addAccount(data.label) });
@@ -54,7 +66,7 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
           if (typeof data.profile !== "string" || data.profile.length > 300) return json(400, { error: "PROFILE_INVALID" });
           return json(200, await manager.lookupProfile(data.name, data.profile));
         }
-        if (!["pause", "resume", "next", "refreshCards", "refreshLibrary", "hours", "cards", "start", "stop", "logout"].includes(data.action)) return json(400, { error: "INVALID_ACTION" });
+        if (!["pause", "resume", "next", "refreshCards", "refreshLibrary", "hours", "cards", "fixed", "start", "stop", "logout"].includes(data.action)) return json(400, { error: "INVALID_ACTION" });
         await manager.control(data.name, data.action); return json(200, { ok: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : '';

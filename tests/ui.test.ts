@@ -3,6 +3,19 @@ import { readFileSync } from "node:fs";
 // @ts-expect-error jsdom types are only used in this test.
 import { JSDOM } from "jsdom";
 let dom:any;
+it('quits the entire app once and stops polling when its server closes',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ let closed=false;const calls:any[]=[];const clear=vi.fn();
+ const fetchMock=vi.fn(async(path:string,options?:any)=>{if(path==='/api/shutdown'){calls.push(JSON.parse(options.body));closed=true;return new Response('{"ok":true}',{status:202});}if(closed)throw new TypeError('Failed to fetch');return new Response('{"accounts":[]}');});
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:()=>123,clearInterval:clear}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('shutdownApp').disabled).toBe(false));$('shutdownApp').click();$('shutdownApp').click();
+ await vi.waitFor(()=>expect($('shutdownTitle').textContent).toBe('Steam HourForge X kapandı'));
+ expect(calls).toEqual([{confirmed:true}]);expect(clear).toHaveBeenCalledTimes(2);expect($('shutdownPanel').hidden).toBe(false);expect($('shutdownMessage').textContent).toContain('kayıtlı hesapların');
+ expect($('shutdownApp').disabled).toBe(true);
+});
 it('keeps keyboard focus on the selected login tab after its request finishes',async()=>{
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
  const a:any={name:'login',label:'Login',status:'offline',authPhase:'idle',gamesPlaying:[],library:[],priorityGames:[],cardQueue:[],queue:[],nextGames:[],manualGames:[],mode:'hours',cardStatus:'waiting',achievements:{}};

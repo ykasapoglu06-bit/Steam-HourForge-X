@@ -3,50 +3,28 @@ import { loadConfig } from "./config.js";
 import { AccountManager } from "./manager.js";
 import { log } from "./logger.js";
 import { startDashboard } from "./dashboard.js";
+import { createShutdown } from "./shutdown.js";
+import { stopSamHelpers } from "./sam.js";
 
 async function main(): Promise<void> {
-  log.info("Steam HourForge X 2.4.4 — Your library. Your pace.");
-
+  log.info("Steam HourForge X 2.4.5 — Your library. Your pace.");
   const config = loadConfig();
   const manager = new AccountManager(config);
-  const dashboard = await startDashboard(manager);
+  let shutdown!: ReturnType<typeof createShutdown>;
+  const dashboard = await startDashboard(manager, 17321, () => { void shutdown('dashboard'); });
+  shutdown = createShutdown({
+    stopAccounts: () => manager.stopAll(),
+    stopHelpers: stopSamHelpers,
+    closeServer: () => { dashboard.close(); dashboard.closeAllConnections(); },
+    exit: code => process.exit(code),
+    report: message => log.info(message),
+  });
+  process.on('SIGINT', () => { void shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+  process.on('uncaughtException', error => { log.fatal({err:error},'Uncaught exception'); void shutdown('uncaughtException',1); });
+  process.on('unhandledRejection', reason => { log.fatal({reason},'Unhandled rejection'); void shutdown('unhandledRejection',1); });
   log.info("Steam HourForge X dashboard: http://127.0.0.1:17321");
-  process.once("SIGINT", () => dashboard.close());
-  process.once("SIGTERM", () => dashboard.close());
-
-  setupShutdown(manager);
-
   await manager.startAll();
 }
 
-function setupShutdown(manager: AccountManager): void {
-  let isShuttingDown = false;
-
-  const shutdown = async (signal: string): Promise<void> => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-
-    log.info({ signal }, "Shutting down...");
-    await manager.stopAll();
-    log.info("Goodbye");
-    process.exit(0);
-  };
-
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("uncaughtException", (err) => {
-    log.fatal({ err }, "Uncaught exception");
-    shutdown("uncaughtException");
-  });
-  process.on("unhandledRejection", (reason) => {
-    log.fatal({ reason }, "Unhandled rejection");
-    shutdown("unhandledRejection");
-  });
-}
-
-main().catch((err) => {
-  log.fatal({ err }, "Fatal startup error");
-  process.exit(1);
-});
-
-
+main().catch(err => { log.fatal({err},'Fatal startup error'); process.exit(1); });

@@ -7,6 +7,14 @@ import { AccountManager } from "../src/manager.js";
 import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 const folders: string[]=[];
+it('stops every account on app exit without deleting settings or saved entries',async()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'first',games:['ALL']},{name:'second',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file);
+ const accounts=(manager as any).accounts as SteamAccount[];
+ const first=vi.spyOn(accounts[0]!,'shutdown').mockRejectedValue(new Error('fixture failure')),second=vi.spyOn(accounts[1]!,'shutdown').mockResolvedValue();
+ const before=readFileSync(file,'utf8');await expect(manager.stopAll()).rejects.toThrow('ACCOUNT_SHUTDOWN_FAILED');
+ expect(first).toHaveBeenCalledOnce();expect(second).toHaveBeenCalledOnce();expect(readFileSync(file,'utf8')).toBe(before);
+ await expect(manager.control('first','start')).rejects.toThrow('APP_SHUTTING_DOWN');expect(()=>manager.addAccount('Late')).toThrow('APP_SHUTTING_DOWN');
+});
 it('rejects a duplicate resolved QR identity before Steam logOn, ignoring display names',()=>{
  const path=folder(),config=ConfigSchema.parse({accounts:[{name:'first',games:['ALL']},{name:'second',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,join(path,'config.json'));
  const [first,second]=(manager as any).accounts;

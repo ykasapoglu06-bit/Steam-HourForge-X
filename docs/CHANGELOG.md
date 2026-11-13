@@ -1,5 +1,21 @@
 # Changelog / Değişiklikler
 
+## v2.4.5
+
+### English
+
+- Red Quit app power button beside Resume all stops accounts and the local server, exits the background app and preserves saved account data. Quit is unavailable during native achievement processing.
+- Selected only mode keeps one or more starred games running without group rotation or card priority, up to 32 games. Empty selection reports no games.
+- Shutdown is idempotent, rejects new work and has bounded cleanup. Owned native helpers are stopped; fatal exits use a failure code.
+- 87 automated tests pass. A separate live-process shutdown/reopen probe was blocked by automatic approval review; no live-process shutdown success is claimed.
+
+### Türkçe
+
+- Hepsini sürdür yanındaki kırmızı güç simgeli Programı kapat düğmesi hesapları ve yerel sunucuyu durdurur, arka plandaki programdan çıkar; kayıtlı hesap verileri korunur. Yerel başarım işlemi sırasında kapatma kullanılamaz.
+- Yalnızca seçtiklerim modu, en fazla 32 yıldızlı oyunu grup geçişi veya kart önceliği olmadan açık tutar. Seçim boşsa oyun bildirilmez.
+- Kapatma bir kez çalışır, yeni işlemleri reddeder ve temizlik süresi sınırlıdır. Uygulamanın yerel yardımcıları durdurulur; ölümcül hatalar başarısız çıkış kodu kullanır.
+- 87 otomatik test başarılı. Ayrı canlı süreç kapatma/yeniden açma denemesi otomatik onay denetimince engellendi; canlı süreç sonlandırmasının doğrulandığı iddia edilmiyor.
+
 ## v2.4.4
 
 ### English
