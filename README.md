@@ -151,7 +151,7 @@ It includes a SHA-256 source manifest and excludes local configuration, sessions
 
 ## Project owner and license
 
-**Yusuf Kasapoglu** · [GitHub](https://github.com/ykasapoglu06-bit) · [Steam: yuu55uuf](https://steamcommunity.com/id/yuu55uuf/)
+**Joseph-06** · [GitHub](https://github.com/ykasapoglu06-bit) · [Steam: yuu55uuf](https://steamcommunity.com/id/yuu55uuf/)
 
 MIT licensed, with the original Alden (realalden27) attribution preserved. SAM.API is by Rick (gibbed) and retains its original license. Steam, game artwork and service marks belong to their respective owners. Steam HourForge X is independent of Valve and Steam. Read [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).
 

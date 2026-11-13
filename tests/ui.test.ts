@@ -134,7 +134,7 @@ it("renders collapsed lists, priority selection, queue, achievements and sign-ou
   expect(firstService.rel).toContain('noopener');expect(firstService.target).toBe('_blank');
   dom.window.document.querySelector('[data-view="about"]').click();expect($('aboutView').hidden).toBe(false);expect($('hero').hidden).toBe(true);
   dom.window.document.querySelector('[data-language="en"]').click();expect(dom.window.document.querySelector('[data-language="en"]').getAttribute('aria-pressed')).toBe('true');
-  expect($('aboutView').textContent).toContain('Your games and accounts in one place');expect($('aboutView').textContent).toContain('Yusuf Kasapoglu');
+  expect($('aboutView').textContent).toContain('Your games and accounts in one place');expect($('aboutView').textContent).toContain('Joseph-06');
   $('language').value='tr';$('language').dispatchEvent(new dom.window.Event('change'));
   dom.window.document.querySelector('[data-view="activity"]').click();
   expect($('libraryDetails').open).toBe(false);expect($('libraryGames').children.length).toBe(0);

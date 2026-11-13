@@ -151,7 +151,7 @@ Paket SHA-256 kaynak manifesti içerir; yerel yapılandırmayı, oturumları, g�
 
 ## Proje sahibi ve lisans
 
-**Yusuf Kasapoglu** · [GitHub](https://github.com/ykasapoglu06-bit) · [Steam: yuu55uuf](https://steamcommunity.com/id/yuu55uuf/)
+**Joseph-06** · [GitHub](https://github.com/ykasapoglu06-bit) · [Steam: yuu55uuf](https://steamcommunity.com/id/yuu55uuf/)
 
 MIT lisanslıdır; Alden (realalden27) tarafından yazılan temel kodun atıfları korunur. SAM.API, Rick (gibbed) tarafından geliştirilmiştir ve kendi lisansını korur. Steam, oyun görselleri ve hizmet logoları ilgili sahiplerine aittir. Steam HourForge X, Valve ve Steam'den bağımsızdır. [LICENSE](LICENSE) ve [üçüncü taraf bildirimlerini](THIRD_PARTY_NOTICES.md) okuyabilirsin.
 

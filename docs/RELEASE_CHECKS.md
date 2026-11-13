@@ -66,3 +66,13 @@ The Steam profile link is the first service tile on account cards, with the offi
 - 87 tests cover guarded/idempotent shutdown, bounded cleanup, all-account stopping with saved configuration preserved, closed UI state, and selected-only non-rotating queues.
 - Windows TypeScript/native bridge build passed. No real achievement writes or real account shutdown performed.
 - Browser tool unavailable for this chat; isolated process shutdown/reopen command rejected by automatic approval review. These checks remain unverified; unit/API/DOM checks passed.
+
+## v2.4.6
+
+### English
+
+Project owner display name is Joseph-06. The existing Steam profile link is retained with the official Steam icon. The tagline is now “Your games. Your control.” Paragraph, heading and section spacing is tighter across About, sign-in and activity panels. Controls retain accessible target sizes. 87 tests and Windows build pass; no browser visual verification was available for this update.
+
+### Türkçe
+
+Proje sahibi görünen adı Joseph-06 olarak değiştirildi. Mevcut Steam profil bağlantısı resmî Steam logosuyla korundu. Yeni slogan: “Oyunların. Senin kontrolünde.” Hakkında, giriş ve durum panellerindeki paragraf, başlık ve bölüm aralıkları daraltıldı. Düğme hedef boyutları korundu. 87 test ve Windows derlemesi başarılı; bu güncellemede tarayıcı üzerinden görsel doğrulama yapılamadı.
