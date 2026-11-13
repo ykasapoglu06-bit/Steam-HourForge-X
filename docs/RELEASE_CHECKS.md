@@ -51,3 +51,12 @@ The Steam profile link is the first service tile on account cards, with the offi
 - Fixed sign-in/removal lifecycle interleavings, duplicate Steam username persistence, and the native achievement cooldown lock.
 - Added four regression tests; all 73 tests pass. Windows TypeScript/native bridge build passes; npm audit reports zero known vulnerabilities.
 - Tests use isolated fixtures and mocks. No real achievement writes were performed for this review.
+
+## Version 2.4.4
+
+- Preserve the latest pause/resume preference across native achievement handoff.
+- Handle release timeouts as values while stop is pending, and clean up listeners/timers on every exit.
+- Reject matching resolved Steam usernames before QR/saved-session logOn; display names remain separate.
+- UI/UX Pro Max review: disable conflicting account actions during handoff, explain waiting and saved pause, localize navigation, improve small-screen targets and keep keyboard focus after login-tab requests.
+- 80 mock/fixture tests pass; Windows native bridge build passes; no live achievement writes.
+- Browser fixture checks: 375x812, 812x375 and desktop; no horizontal overflow; TR/EN labels and arrow/Home keyboard login navigation verified.

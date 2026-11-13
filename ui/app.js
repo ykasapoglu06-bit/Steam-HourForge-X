@@ -138,7 +138,7 @@ function renderAccounts(){
       ['CSWatch',`https://cswat.ch/stats/${id}`,'cswatch.png'],
       ['SteamIDCheck',`https://steamidcheck.com/profile/${id}`,'steamidcheck.svg']
     ].map(([name,href,icon])=>`<a class="service-link ${icon==='steam.ico'?'steam-profile-link':''}" href="${href}" target="_blank" rel="noopener noreferrer" title="${escape(t('openService',{name}))}"><img src="/logos/${icon}" alt="" loading="lazy"><span>${name}</span><span class="external-arrow" aria-hidden="true">↗</span></a>`).join(''):'';
-    return `<article class="account-card" data-status="${escape(a.status)}"><div class="account-identity"><img class="account-avatar" src="${escape(a.avatarUrl||'/avatar.svg')}" data-avatar alt="${escape(t('profilePhoto'))}"><div><h3>${escape(a.displayName||a.label)}</h3><small class="account-label">${escape(a.label)}</small><div class="status">${escape(status(a))}</div></div></div>${id?`<div class="profile-identity"><dl><div><dt>SteamID64</dt><dd>${id}</dd></div><div><dt>SteamID</dt><dd>${steam2}</dd></div><div><dt>Vanity URL</dt><dd>${vanity?`/id/${escape(vanity)}`:escape(t('vanityUnavailable'))}</dd></div></dl></div>`:`<p>${escape(t('loggedOutHelp'))}</p>`}<div class="meta"><div><strong>${a.library.length}</strong><span>${escape(t('totalGames'))}</span></div><div><strong>${activeSet(a).size}</strong><span>${escape(t('active'))}</span></div><div><strong>${a.priorityGames.length}</strong><span>${escape(t('pinned'))}</span></div></div>${links?`<div class="service-links">${links}</div><p class="external-note">${escape(t('externalServicesNote'))}</p>`:''}<div class="actions"><button class="primary" data-manage="${escape(a.name)}">${escape(t('manage'))}</button><button data-control="${offline?'start':'stop'}" data-name="${escape(a.name)}" ${mutating||!reachable?'disabled':''}>${escape(t(offline?'connect':'disconnect'))}</button><button data-control="logout" data-name="${escape(a.name)}" ${mutating||!reachable?'disabled':''}>${escape(t('logout'))}</button><button class="danger-text" data-remove="${escape(a.name)}" ${mutating||!reachable||a.samBusy?'disabled':''}>${escape(t('removeAccount'))}</button></div></article>`;
+    return `<article class="account-card" data-status="${escape(a.status)}"><div class="account-identity"><img class="account-avatar" src="${escape(a.avatarUrl||'/avatar.svg')}" data-avatar alt="${escape(t('profilePhoto'))}"><div><h3>${escape(a.displayName||a.label)}</h3><small class="account-label">${escape(a.label)}</small><div class="status">${escape(status(a))}</div></div></div>${id?`<div class="profile-identity"><dl><div><dt>SteamID64</dt><dd>${id}</dd></div><div><dt>SteamID</dt><dd>${steam2}</dd></div><div><dt>Vanity URL</dt><dd>${vanity?`/id/${escape(vanity)}`:escape(t('vanityUnavailable'))}</dd></div></dl></div>`:`<p>${escape(t('loggedOutHelp'))}</p>`}<div class="meta"><div><strong>${a.library.length}</strong><span>${escape(t('totalGames'))}</span></div><div><strong>${activeSet(a).size}</strong><span>${escape(t('active'))}</span></div><div><strong>${a.priorityGames.length}</strong><span>${escape(t('pinned'))}</span></div></div>${links?`<div class="service-links">${links}</div><p class="external-note">${escape(t('externalServicesNote'))}</p>`:''}${a.samBusy?`<p class="account-operation" role="status">${escape(t(a.manualPaused?'samPausePending':'samBusy'))}</p>`:''}<div class="actions"><button class="primary" data-manage="${escape(a.name)}">${escape(t('manage'))}</button><button data-control="${offline?'start':'stop'}" data-name="${escape(a.name)}" ${mutating||!reachable||a.samBusy?'disabled':''}>${escape(t(offline?'connect':'disconnect'))}</button><button data-control="logout" data-name="${escape(a.name)}" ${mutating||!reachable||a.samBusy?'disabled':''}>${escape(t('logout'))}</button><button class="danger-text" data-remove="${escape(a.name)}" ${mutating||!reachable||a.samBusy?'disabled':''}>${escape(t('removeAccount'))}</button></div></article>`;
   }).join('');
 }
 
@@ -153,7 +153,7 @@ function render(){
   show('emptyAccounts',!a&&view!=='about');
   if(!a){text('accountLabel','');$('accountLabel').hidden=true;for(const id of ['hero','stats','loginPanel','activityView','libraryView','discoverView','queueView','cardFocus','accountsView'])show(id,false);$('pauseAll').disabled=$('resumeAll').disabled=true;return;}
   const needsLogin=renderLogin(a);
-  $('pauseAll').disabled=mutating||!reachable||!accounts.some(x=>x.status==='farming'&&!x.isPaused);
+  $('pauseAll').disabled=mutating||!reachable||!accounts.some(x=>(x.samBusy&&!x.manualPaused)||(x.status==='farming'&&!x.isPaused));
   $('resumeAll').disabled=mutating||!reachable||!accounts.some(x=>x.manualPaused);
   text('accountLabel',a.label);const running=reachable&&a.status==='farming'&&!a.isPaused,cardActive=a.mode==='cards'&&a.cardQueue.length>0;
   text('statusLabel',reachable?status(a):t('status.offline'));
@@ -161,11 +161,11 @@ function render(){
   text('headline',!reachable?t('stoppedTitle'):running?t(cardActive?'workingCards':'workingHours'):a.status==='paused'?t('pausedTitle'):a.status==='offline'?t('stoppedTitle'):a.status==='connecting'||a.status==='online'?t('connectionTitle'):status(a));
   const cardName=a.cardQueue[0]?.name||'';
   text('description',!reachable?t('offlineBanner'):running?cardActive?t('cardsSummary',{game:cardName}):t('prioritySummary',{pinned:a.priorityGames.length,rest:Math.max(0,a.library.length-a.priorityGames.length)}):a.status==='paused'?t(a.manualPaused?'manualPause':'steamPause'):a.qrCode?t('qrHelp'):t('connectIssue'));
-  if(a.samBusy)text('description',t('samBusy'));
+  if(a.samBusy)text('description',t(a.manualPaused?'samPausePending':'samBusy'));
   if(a.samBusy)text('headline',t('achievementOperation'));
-  text('pause',t(a.manualPaused?'resume':'pause'));$('pause').disabled=mutating||!reachable||!['farming','paused'].includes(a.status);
+  text('pause',t(a.manualPaused?'resume':'pause'));$('pause').disabled=mutating||!reachable||(!a.samBusy&&!['farming','paused'].includes(a.status));
   const offline=['offline','error','skipped'].includes(a.status);text('connect',t(offline?'connect':'disconnect'));$('connect').disabled=mutating||!reachable||a.samBusy;
-  $('logout').disabled=mutating||!reachable||!a.steamId;
+  $('logout').disabled=mutating||!reachable||!a.steamId||a.samBusy;
   text('activeCount',reachable?activeSet(a).size:'—');text('libraryCount',a.library.length);text('priorityCount',a.priorityGames.length);text('remainingCards',a.cardCheckedAt?a.cardQueue.reduce((sum,g)=>sum+g.remaining,0):'—');
   show('hero',!needsLogin&&!['accounts','about'].includes(view));show('stats',!needsLogin&&!['accounts','about'].includes(view));
   show('activityView',view==='activity'&&!needsLogin);
@@ -250,9 +250,18 @@ async function startLogin(method,credentials={}){
   finally{$('steamPassword').value='';$('steamPassword').type='password';$('togglePassword').setAttribute('aria-pressed','false');text('togglePassword',t('showPassword'));loginPending=false;render();}
 }
 $('credentialsForm').onsubmit=event=>{event.preventDefault();void startLogin('credentials',{accountName:$('steamUsername').value.trim(),password:$('steamPassword').value});};
+async function selectLoginMethod(method){
+  loginMethod=method;loginLocalError='';toast('');
+  if(method==='qr'&&current()?.authPhase!=='qr')await startLogin('qr');
+  else if(method==='credentials'&&current()?.authPhase==='qr')await command('stop');
+  render();
+}
 document.querySelectorAll('[data-login-method]').forEach(button=>{
-  button.onclick=async()=>{loginMethod=button.dataset.loginMethod;loginLocalError='';toast('');if(loginMethod==='qr'&&current()?.authPhase!=='qr')await startLogin('qr');else if(loginMethod==='credentials'&&current()?.authPhase==='qr')await command('stop');render();};
-  button.onkeydown=event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();const other=button.id==='qrTab'?$('credentialsTab'):$('qrTab');other.click();other.focus();}};
+  button.onclick=()=>selectLoginMethod(button.dataset.loginMethod);
+  button.onkeydown=async event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+    event.preventDefault();const other=event.key==='Home'?$('credentialsTab'):event.key==='End'?$('qrTab'):button.id==='qrTab'?$('credentialsTab'):$('qrTab');
+    await selectLoginMethod(other.dataset.loginMethod);other.focus();
+  }};
 });
 $('retryQR').onclick=()=>startLogin('qr');
 $('cancelLogin').onclick=async()=>{await command('stop');loginLocalError='';render();};

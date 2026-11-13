@@ -28,6 +28,7 @@ export class AccountManager {
         const state = other.getState();
         if (["offline", "skipped", "error"].includes(state.status)) continue;
         if (steamId && steamId === state.steamId) return state.label;
+        if (steamName && state.steamAccountName?.toLowerCase() === steamName.toLowerCase()) return state.label;
       }
       return null;
     };
@@ -119,7 +120,8 @@ export class AccountManager {
     }
     const account = this.find(name);
     const config = this.config.accounts.find(item => item.name === name)!;
-    if(['stop','logout','start'].includes(action)){
+    const lifecycleAction=['stop','logout','start'].includes(action);
+    if(lifecycleAction){
       if(account.getState().samBusy)throw new Error('REQUEST_BUSY');
       this.sam.invalidate(name);
       this.lifecycleBusy.add(name);
@@ -140,7 +142,7 @@ export class AccountManager {
       case "hours": case "cards": account.setMode(action); this.save(); break;
       default: throw new Error("INVALID_ACTION");
     }
-    }finally{if(['stop','logout','start'].includes(action))this.lifecycleBusy.delete(name);}
+    }finally{if(lifecycleAction)this.lifecycleBusy.delete(name);}
   }
   onStateChange(handler: (state: AccountState) => void): void { for (const account of this.accounts) account.on("stateChange", handler); }
   get count(): number { return this.accounts.length; }

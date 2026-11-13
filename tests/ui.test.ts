@@ -3,6 +3,34 @@ import { readFileSync } from "node:fs";
 // @ts-expect-error jsdom types are only used in this test.
 import { JSDOM } from "jsdom";
 let dom:any;
+it('keeps keyboard focus on the selected login tab after its request finishes',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ const a:any={name:'login',label:'Login',status:'offline',authPhase:'idle',gamesPlaying:[],library:[],priorityGames:[],cardQueue:[],queue:[],nextGames:[],manualGames:[],mode:'hours',cardStatus:'waiting',achievements:{}};
+ const fetchMock=async(_path:string,options?:any)=>{if(options?.method){a.status='connecting';a.authPhase='qr';return new Response('{"ok":true}');}return new Response(JSON.stringify({accounts:[a]}));};
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:()=>0}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('loginPanel').hidden).toBe(false));
+ $('credentialsTab').focus();$('credentialsTab').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+ await vi.waitFor(()=>expect(dom.window.document.activeElement).toBe($('qrTab')));
+ expect($('qrTab').getAttribute('aria-selected')).toBe('true');expect($('qrPane').hidden).toBe(false);
+});
+it('explains achievement handoff, disables conflicting account actions and keeps pause available',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ const a:any={name:'busy',label:'Busy account',status:'offline',samBusy:true,steamId:'76561198000000000',manualPaused:false,gamesPlaying:[],library:[],priorityGames:[],cardQueue:[],queue:[],nextGames:[],manualGames:[],mode:'hours',cardStatus:'waiting',achievements:{}};
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts:[a]})),setInterval:()=>0}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('headline').textContent).toContain('Başarım'));
+ expect($('logout').disabled).toBe(true);expect($('pause').disabled).toBe(false);expect($('pauseAll').disabled).toBe(false);
+ dom.window.document.querySelector('[data-view="accounts"]').click();
+ for(const action of ['start','logout'])expect($('accountCards').querySelector(`[data-control="${action}"]`).disabled).toBe(true);
+ expect($('accountCards').querySelector('[data-remove]').disabled).toBe(true);
+ expect($('accountCards').querySelector('[role="status"]').textContent).toContain('geçici');
+ expect(dom.window.document.querySelector('[data-view="accounts"]').getAttribute('aria-current')).toBe('page');
+});
 afterEach(()=>{dom?.window.close();vi.unstubAllGlobals();vi.restoreAllMocks();});
 it('removes a confirmed account, shows the empty state and lets the user add another',async()=>{
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};

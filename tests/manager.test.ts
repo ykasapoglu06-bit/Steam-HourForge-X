@@ -7,6 +7,14 @@ import { AccountManager } from "../src/manager.js";
 import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 const folders: string[]=[];
+it('rejects a duplicate resolved QR identity before Steam logOn, ignoring display names',()=>{
+ const path=folder(),config=ConfigSchema.parse({accounts:[{name:'first',games:['ALL']},{name:'second',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,join(path,'config.json'));
+ const [first,second]=(manager as any).accounts;
+ Object.assign(first.state,{status:'farming',steamAccountName:'RealLogin',displayName:'Shared display name',steamId:'76561198000000000'});
+ expect(second.claimCheck(null,'reallogin')).toBe(first.state.label);
+ expect(second.claimCheck(null,'Shared display name')).toBeNull();
+ first.state.status='offline';expect(second.claimCheck(null,'RealLogin')).toBeNull();
+});
 it('rejects duplicate Steam usernames before changing saved accounts',async()=>{
  const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'first',accountName:'Player',games:['ALL']},{name:'second',games:['ALL']}],settings:{dataDirectory:join(path,'data')}});
  const manager=new AccountManager(config,file),begin=vi.spyOn(SteamAccount.prototype,'beginLogin').mockResolvedValue();

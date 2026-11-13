@@ -285,21 +285,26 @@ export class SteamAccount extends EventEmitter {
     try{
     if(this.steamBlocked&&Date.now()-this.samFinishedAt<3000){const until=Date.now()+3000;while(this.steamBlocked&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
     if(this.steamBlocked)throw new Error('SAM_GAME_RUNNING');
-    const steamId=this.state.steamId,wasStarted=this.started,manualPaused=this.state.manualPaused;
+    const steamId=this.state.steamId,wasStarted=this.started;
+    let cleanupRelease=()=>{};
     try{
-      const disconnected=this.client.steamID?new Promise<void>((resolve,reject)=>{
-        const done=()=>{clearTimeout(timer);resolve();};
-        const timer=setTimeout(()=>{this.client.removeListener('disconnected',done);reject(new Error('SAM_SESSION_RELEASE_FAILED'));},8000);
+      // Resolve timeout as a value: stop() may still be pending when it fires.
+      const disconnected=this.client.steamID?new Promise<Error|null>(resolve=>{
+        const done=()=>{cleanupRelease();resolve(null);};
+        const timer=setTimeout(()=>{cleanupRelease();resolve(new Error('SAM_SESSION_RELEASE_FAILED'));},8000);
+        cleanupRelease=()=>{clearTimeout(timer);this.client.removeListener('disconnected',done);};
         this.client.once('disconnected',done);
-      }):Promise.resolve();
-      await this.stop();await disconnected;
+      }):Promise.resolve(null);
+      await this.stop({preservePause:true});
+      const releaseError=await disconnected;if(releaseError)throw releaseError;
       const result=await operation(steamId);
       this.state.achievements[appid]={unlocked:result.unlocked,total:result.total,checkedAt:Date.now()};
       return result;
     }finally{
+      cleanupRelease();
       this.state.lastReportedAt=null;
       this.samFinishedAt=Date.now();
-      this.state.manualPaused=manualPaused;this.state.isPaused=manualPaused;
+      this.state.isPaused=this.state.manualPaused||this.steamBlocked;
       if(wasStarted){await this.start();const until=Date.now()+10000;while(!this.state.connectedSince&&this.state.status==='connecting'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
     }
     }finally{this.state.samBusy=false;this.refreshGames();}
@@ -405,7 +410,7 @@ export class SteamAccount extends EventEmitter {
     this.refreshTimer = setInterval(() => this.refreshGames(), this.settings.refreshGamesIntervalMs);
   }
 
-  async stop(): Promise<void> {
+  async stop(options:{preservePause?:boolean}={}): Promise<void> {
     this.sessionGeneration++;
     this.stopped = true;
     this.started = false;
@@ -424,7 +429,8 @@ export class SteamAccount extends EventEmitter {
     this.logOnTimer = null;
     this.refreshTimer = null;
     this.webCookies = [];
-    this.state.isPaused=false;this.state.manualPaused=false;this.steamBlocked=false;
+    if(!options.preservePause)this.state.manualPaused=false;
+    this.state.isPaused=this.state.manualPaused;this.steamBlocked=false;
     if (this.state.status === "offline" || this.state.status === "skipped") { this.updateState({ status: "offline", connectedSince: null }); return; }
 
     this.client.gamesPlayed([]);

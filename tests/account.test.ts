@@ -23,6 +23,42 @@ import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 
 describe("SteamAccount", () => {
+  it.each([false,true])('keeps the latest pause preference during native handoff (initial %s)',async(initial)=>{
+    const config=ConfigSchema.parse({accounts:[{name:'pause-handoff',games:[730]}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+    Object.assign(internal.state,{steamId:'76561198000000000',connectedSince:new Date(),status:'farming',manualPaused:initial,library:[{appid:730,name:'Fixture',playtimeMinutes:0}]});
+    internal.started=true;vi.spyOn(internal.client,'gamesPlayed').mockImplementation(()=>{});
+    vi.spyOn(account,'start').mockImplementation(async()=>{internal.stopped=false;Object.assign(internal.state,{connectedSince:new Date(),status:internal.state.manualPaused?'paused':'farming'});});
+    let finish!:(value:{unlocked:number;total:number})=>void;
+    const task=account.desktopAchievements(730,()=>new Promise(resolve=>finish=resolve));
+    await vi.waitFor(()=>expect(finish).toBeTypeOf('function'));
+    initial?account.resume():account.pause();finish({unlocked:0,total:1});await task;
+    expect(account.getState().manualPaused).toBe(!initial);expect(account.getState().status).toBe(initial?'farming':'paused');
+  });
+  it('cleans up native release listeners if stopping fails',async()=>{
+    vi.useFakeTimers();
+    const config=ConfigSchema.parse({accounts:[{name:'release-failure',games:[730]}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+    Object.assign(internal.state,{steamId:'76561198000000000',connectedSince:new Date(),status:'farming',library:[{appid:730,name:'Fixture',playtimeMinutes:0}]});
+    internal.client.steamID={getSteamID64:()=> '76561198000000000'};
+    const listeners=internal.client.listenerCount('disconnected'),timers=vi.getTimerCount();
+    vi.spyOn(account,'stop').mockRejectedValue(new Error('STOP_FAILED'));
+    vi.spyOn(internal,'refreshGames').mockImplementation(()=>{});
+    await expect(account.desktopAchievements(730,async()=>({unlocked:0,total:1}))).rejects.toThrow('STOP_FAILED');
+    expect(internal.client.listenerCount('disconnected')).toBe(listeners);expect(vi.getTimerCount()).toBe(timers);
+  });
+  it('handles release timeout while stop is still pending without an unhandled rejection',async()=>{
+    vi.useFakeTimers();
+    const config=ConfigSchema.parse({accounts:[{name:'slow-stop',games:[730]}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+    Object.assign(internal.state,{steamId:'76561198000000000',connectedSince:new Date(),status:'farming',library:[{appid:730,name:'Fixture',playtimeMinutes:0}]});
+    internal.client.steamID={getSteamID64:()=> '76561198000000000'};
+    let finish!:()=>void;vi.spyOn(account,'stop').mockImplementation(()=>new Promise(resolve=>finish=resolve));
+    vi.spyOn(internal,'refreshGames').mockImplementation(()=>{});const operation=vi.fn(async()=>({unlocked:0,total:1}));
+    const task=account.desktopAchievements(730,operation).catch(error=>error.message);
+    await vi.advanceTimersByTimeAsync(9000);finish();
+    expect(await task).toBe('SAM_SESSION_RELEASE_FAILED');expect(operation).not.toHaveBeenCalled();expect(internal.state.samBusy).toBe(false);
+  });
   it('plays one eligible card game and returns to the priority hours queue when cards run out',()=>{
     const config=ConfigSchema.parse({accounts:[{name:'card-return',games:['ALL'],priorityGames:[730]}]});
     const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
