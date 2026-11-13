@@ -7,7 +7,7 @@
       "priorityGames": [730],
       "rotationMinutes": 30,
       "persona": 1,
-      "loginMethod": "qr",
+      "loginMethod": "credentials",
       "farmingMode": "hours"
     },
     {
@@ -15,7 +15,7 @@
       "label": "Second account",
       "enabled": false,
       "games": ["ALL"],
-      "loginMethod": "qr"
+      "loginMethod": "credentials"
     }
   ],
   "settings": {

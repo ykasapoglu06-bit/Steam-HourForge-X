@@ -3,13 +3,13 @@
 <p align="center"><img src="ui/logo.png" alt="Steam HourForge X" width="220"></p>
 <p align="center"><b>Kütüphanen, senin kontrolünde.</b><br>Türkçe · <a href="README.md">English</a></p>
 
-Steam saatlerini, oyun sırasını ve birden fazla hesabı tek bir yerel panelden yönet. QR koduyla bağlan; favorilerini önceliklendir, şimdi çalışan oyunları ve sıradaki grubu gör.
+Steam saatlerini, oyun sırasını ve birden fazla hesabı tek bir yerel panelden yönet. Kullanıcı adı/şifre veya QR koduyla bağlan; favorilerini önceliklendir, şimdi çalışan oyunları ve sıradaki grubu gör.
 
 | Özellik | Neler yapabilirsin? |
 | --- | --- |
 | Saat önceliği | Öncelikli oyunlarını her grupta tut; kalan oyunları dönüşümlü çalıştır. |
 | Kütüphane | Tüm oyunları tara, herkese açık profil ara, eksik oyunu AppID veya mağaza bağlantısıyla ekle. |
-| Hesaplar | Bağımsız QR girişleri, kaydedilen oturumlar, fotoğraf ve Steam kimlik bilgileri. |
+| Hesaplar | Bağımsız şifre/QR girişleri, kaydedilen oturumlar, fotoğraf ve Steam kimlik bilgileri. |
 | Profil bağlantıları | Steam, VacList, CSRep, CSStats, CSWatch ve SteamIDCheck kısayolları. |
 | Kart modu | Kart hakkı kalan oyunları sırayla çalıştır; haklar bitince saat sırasına dön. |
 | Başarımlar | İlerlemeyi kontrol et; Windows SAM entegrasyonunda eksikleri görüp açıkça onayla. |
@@ -20,7 +20,7 @@ Steam saatlerini, oyun sırasını ve birden fazla hesabı tek bir yerel panelde
 1. Node.js **22.13 veya daha yeni** bir sürümü kur.
 2. Kaynak dosyalarını bir klasöre çıkar ve `start.bat` dosyasını aç.
 3. İlk açılış bağımlılıkları kurar, uygulamayı derler ve logolu **Steam HourForge X** kısayollarını klasörde ve masaüstünde oluşturur.
-4. Paneldeki QR kodunu Steam mobil uygulamasıyla onayla.
+4. Steam hesap adın ve şifrenle giriş yap. Steam ayrıca kod isterse e-posta veya uygulama kodunu aynı panele gir. QR koduyla giriş de ayrı bir seçenektir.
 
 Panel: **http://127.0.0.1:17321**. Sonraki açılışlarda logolu kısayolu kullanabilirsin. Tarayıcıyı kapatmak arka plandaki uygulamayı durdurmaz; panelden hesapları durdurabilirsin.
 
@@ -41,6 +41,8 @@ Windows SAM köprüsü için .NET Framework C# derleyicisi gerekir. Linux’ta y
 
 Oyun listesi başlangıçta kapalıdır; oyun sayısına tıklayarak aç. Şimdi çalışan grup, bir sonraki grup ve tam sıra ayrı ayrı görülebilir. Bulunmayan oyunları AppID veya Steam mağaza bağlantısıyla ekleyebilirsin; oyun sahipliği yine Steam’e bağlıdır.
 
+Panelden girilen şifre yalnızca o giriş denemesinde kullanılır; yapılandırma dosyasına, günlüklere veya tarayıcı deposuna kaydedilmez. Steam Guard kullanmayan hesaplar kod gerekmeden devam eder. Steam doğrulama isterse ilgili kod/onay adımı gösterilir.
+
 **Bağlantıyı kes** oturumu saklar. **Profilden çıkış** ilgili giriş verilerini siler; tekrar QR onayı gerekir. Hesap listesi ve tercihler `config.json` içinde, oturum tokenları ve profil önbellekleri `data/` içinde yerel olarak tutulur. Bu dosyaları başkalarıyla paylaşma. Kaynak paketine dahil edilmezler.
 
 ## Başarım işlemleri
@@ -56,3 +58,9 @@ Steam saat kaydını, kart uygunluğunu ve hesap kurallarını kendisi belirler.
 MIT lisansı ve temel alınan projenin atıfları korunur. SAM.API kendi orijinal lisansıyla dağıtılır. Ayrıntılar: [Üçüncü taraf bildirimleri](THIRD_PARTY_NOTICES.md), [güvenlik](SECURITY.md), [katkı rehberi](CONTRIBUTING.md).
 
 Sorun bildirirken parolaları, tokenları, çerezleri veya kişisel `config.json` dosyanı ekleme. Ekran görüntülerindeki QR kodlarını ve hesap bilgilerini gizle.
+
+### Başarım seçimi ve oturum devri
+
+Topluluk sayfası gizli veya okunamıyor olsa da yerel başarım düzenleyicisine ulaşabilirsin. Eksik başarım listesinden tek tek seçim yapabilir ya da tümünü seçebilirsin. Önizlemeyi kontrol edip onayla. Windows işlemi sırasında saat oturumu geçici olarak ayrılır; işlemden sonra kayıtlı oturumla yeniden bağlanır. Sonuç ayrı bir yerel Steam okumasıyla doğrulanır. Sunucudan yönetilen bazı başarımlar reddedilebilir.
+
+Önce kart modunda mevcut oyun, kalan kart hakkı ve sıradaki oyun gösterilir. Haklar bitince kaydedilmiş önceliklerle saat sırası otomatik devam eder. Rozet sayacındaki azalma gözlemlenir; kartın ne zaman düşeceği garanti edilmez.

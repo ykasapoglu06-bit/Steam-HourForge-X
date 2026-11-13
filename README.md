@@ -7,7 +7,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-58d5ff)
 ![Interface: EN / TR](https://img.shields.io/badge/interface-EN%20%2F%20TR-007bff)
 
-Steam HourForge X is a local dashboard for Steam playtime reporting and eligible trading-card drops. It supports independent account queues, QR sign-in, always-on priority games, full library scans, public profile lookup, and Turkish/English interfaces.
+Steam HourForge X is a local dashboard for Steam playtime reporting and eligible trading-card drops. It supports independent account queues, username/password or QR sign-in, always-on priority games, full library scans, public profile lookup, and Turkish/English interfaces.
 
 ## Run on Windows
 
@@ -15,7 +15,7 @@ Open the **Steam HourForge X** desktop shortcut, or run `start.bat` to build and
 
 For a GitHub/source checkout, install Node.js 22.13 or newer, run `npm ci`, then `npm run build` and `npm start`. On Windows, `start.bat` installs missing dependencies, builds, creates branded shortcuts in the application folder and on the desktop, and opens the dashboard. A locally bundled runtime under `.runtime/` is optional and is not included in the source release.
 
-The first run works without a `.env` or personal `config.json`: it opens a full-library QR account. Approve the QR code in the Steam mobile app. Accounts and preferences are saved to `config.json`. Public identity metadata is cached locally in `data/profiles/` so account cards remain recognizable after restarting.
+The first run works without a `.env` or personal `config.json`: it opens a full-library account with a username/password sign-in form. Steam Guard is not required by the application. If Steam requests an email or authenticator code, enter it in the same panel; device/email approval is also supported. QR sign-in remains available as a separate option. Passwords entered in the dashboard are held only for the current attempt and never saved to config, logs, browser storage or the status API. The refresh token is stored locally for future sessions. Accounts and preferences are saved to `config.json`. Public identity metadata is cached locally in `data/profiles/` so account cards remain recognizable after restarting.
 
 ## Priorities and modes
 
@@ -27,7 +27,7 @@ Account settings let you choose a label and a group duration of 5–240 minutes.
 
 ## Accounts and libraries
 
-Use **Add account** and approve its QR code in the Steam mobile app. Each connected account has independent login data, priorities, playtime groups and card status. A pending QR login does not block other accounts. The same Steam account cannot run under multiple Steam HourForge X profiles at once.
+Use **Add account**, then sign in with its Steam account name and password, or choose QR code. Each connected account has independent login sessions, priorities, playtime groups and card status. A pending QR login does not block other accounts. The same Steam account cannot run under multiple Steam HourForge X profiles at once.
 
 **Find games** can scan your connected account's full library or look up a public Steam profile by URL, SteamID64 or custom name. Private and empty libraries may not be available. Looking up another profile does not grant ownership of its games; only games in the selected account's library can be prioritized.
 
@@ -107,3 +107,9 @@ Account cards display the Steam photo, display name, SteamID64, Steam2 ID and va
 **Yusuf Kasapoglu** · [Steam: yuu55uuf](https://steamcommunity.com/id/yuu55uuf/) · [GitHub](https://github.com/ykasapoglu06-bit)
 
 Built on the upstream MIT project, with its attribution preserved. The provided project logo and third-party service marks identify their respective owners; this project is not affiliated with Valve or Steam. See [third-party notices](THIRD_PARTY_NOTICES.md).
+
+### Achievement selection and session handoff
+
+The local achievement editor is available even when community achievement pages are private or unreadable. Select one or more missing achievements in the preview, then confirm. For Windows native operations the farmer temporarily disconnects to avoid competing with the desktop Steam session, then reconnects using the saved token. Completion is verified in a separate native read. Some server-controlled achievements can still be rejected.
+
+The cards-first dashboard shows the active eligible game, its remaining rights and the next game. When no rights remain, hours rotation resumes automatically with your saved priorities. A badge-counter decrease is an observation, not a guaranteed item drop time.
