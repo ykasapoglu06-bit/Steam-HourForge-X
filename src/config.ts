@@ -85,7 +85,7 @@ export function loadConfig(): AppConfig {
 
   if (!GAMES) {
     if(ACCOUNT_NAME||PASSWORD)throw new Error("GAMES is required when using environment credentials.");
-    return ConfigSchema.parse({accounts:[{name:'main',label:'Main',games:['ALL'],loginMethod:'qr'}]});
+    return ConfigSchema.parse({accounts:[{name:'main',label:'Main',games:['ALL'],loginMethod:'credentials'}]});
   }
 
   const rawPersona = PERSONA !== undefined ? parseInt(PERSONA, 10) : 1;

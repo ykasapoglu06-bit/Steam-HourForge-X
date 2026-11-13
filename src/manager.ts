@@ -50,7 +50,7 @@ export class AccountManager {
     const parsed = AccountPreferencesSchema.shape.label.parse(label);
     if (this.accounts.length >= 20) throw new Error("ACCOUNT_LIMIT");
     if (this.accounts.some(account => account.getState().label.toLowerCase() === parsed.toLowerCase())) throw new Error("LABEL_EXISTS");
-    const config = AccountSchema.parse({ name: "account-" + randomUUID().slice(0, 8), label: parsed, games: ["ALL"], loginMethod: "qr", farmingMode: "hours" });
+    const config = AccountSchema.parse({ name: "account-" + randomUUID().slice(0, 8), label: parsed, games: ["ALL"], loginMethod: "credentials", farmingMode: "hours" });
     const account = this.createAccount(config);
     this.config.accounts.push(config);
     this.accounts.push(account);
@@ -65,10 +65,28 @@ export class AccountManager {
     this.save();
   }
   async lookupProfile(name: string, profile: string) { return this.find(name).lookupProfile(profile); }
+  async login(name:string,input:unknown){
+    const data=input as Record<string,unknown>;
+    if(data.method!=='credentials'&&data.method!=='qr')throw new Error('INVALID_SETTINGS');
+    if(data.method==='credentials'){
+      if(typeof data.accountName!=='string'||!data.accountName.trim()||data.accountName.length>64||/[\x00-\x1f]/.test(data.accountName)||typeof data.password!=='string'||!data.password||data.password.length>256)throw new Error('AUTH_INVALID_INPUT');
+      await this.find(name).beginLogin('credentials',{accountName:data.accountName.trim(),password:data.password});
+    }else await this.find(name).beginLogin('qr');
+    this.save();
+  }
+  async guard(name:string,code:unknown){if(typeof code!=='string'||! /^[a-zA-Z0-9]{5,8}$/.test(code))throw new Error('AUTH_GUARD_INVALID');await this.find(name).submitGuardCode(code);}
   async addGame(name:string,appid:number){await this.find(name).addGame(appid);this.save();}
-  async achievements(name:string,appid:number){return this.find(name).achievementsFor(appid);}
+  async achievements(name:string,appid:number){
+    const account=this.find(name);
+    if(process.platform!=='win32')return account.achievementsFor(appid);
+    try{return await account.desktopAchievements(appid,steamId=>this.sam.inspect(steamId,appid));}catch(error){
+      const code=error instanceof Error?error.message:'';
+      if(!['SAM_STEAM_OFFLINE','SAM_UNAVAILABLE','SAM_ACCOUNT_MISMATCH'].includes(code))throw error;
+      try{return await account.achievementsFor(appid);}catch{throw error;}
+    }
+  }
   async previewAchievements(name:string,appid:number){return this.find(name).desktopAchievements(appid,steamId=>this.sam.preview(name,steamId,appid));}
-  async completeAchievements(name:string,appid:number,nonce:string,confirmed:boolean){return this.find(name).desktopAchievements(appid,steamId=>this.sam.complete(name,steamId,appid,nonce,confirmed));}
+  async completeAchievements(name:string,appid:number,nonce:string,confirmed:boolean,ids?:string[]){return this.find(name).desktopAchievements(appid,steamId=>this.sam.complete(name,steamId,appid,nonce,confirmed,ids));}
   async control(name: string, action: string): Promise<void> {
     if (name === "*") {
       if (!["pause", "resume"].includes(action)) throw new Error("INVALID_ACTION");

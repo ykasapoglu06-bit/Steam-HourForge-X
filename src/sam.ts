@@ -54,16 +54,23 @@ export class SamService {
     if(ids.length)this.previews.set(nonce,{account,steamId,appid,ids,expiresAt});
     return {...result,nonce:ids.length?nonce:null,expiresAt};
   }
-  async complete(account:string,steamId:string,appid:number,nonce:string,confirmed:boolean){
+  async inspect(steamId:string,appid:number){return this.run({operation:'inspect',steamId,appid});}
+  async complete(account:string,steamId:string,appid:number,nonce:string,confirmed:boolean,selection?:string[]){
     const item=this.previews.get(nonce);
     if(!confirmed||!item||item.account!==account||item.steamId!==steamId||item.appid!==appid||item.expiresAt<this.clock())throw new Error('SAM_PREVIEW_EXPIRED');
+    const ids=selection===undefined?item.ids:[...new Set(selection)];
+    if(!ids.length||ids.some(id=>!item.ids.includes(id)))throw new Error('SAM_PREVIEW_CHANGED');
     this.previews.delete(nonce);
-    this.audit({event:'before',at:this.clock(),account,steamId,appid,achievementIds:item.ids});
+    this.audit({event:'before',at:this.clock(),account,steamId,appid,achievementIds:ids});
     try{
-      const result=await this.run({operation:'complete',steamId,appid,ids:item.ids});
+      const result=await this.run({operation:'complete',steamId,appid,ids});
       if(result.stored!==true||result.completed===undefined||result.rejected===undefined)throw new Error('SAM_VERIFY_FAILED');
-      this.audit({event:'after',at:this.clock(),account,steamId,appid,unlocked:result.unlocked,total:result.total,completed:result.completed,rejected:result.rejected});
-      return result;
+      const fresh=await this.run({operation:'inspect',steamId,appid});
+      if(ids.some(id=>!fresh.achievements.some(row=>row.id===id)))throw new Error('SAM_VERIFY_FAILED');
+      const completed=ids.filter(id=>fresh.achievements.some(row=>row.id===id&&row.unlocked)).length;
+      const verified={...fresh,stored:true,completed,rejected:ids.length-completed};
+      this.audit({event:'after',at:this.clock(),account,steamId,appid,unlocked:verified.unlocked,total:verified.total,completed:verified.completed,rejected:verified.rejected});
+      return verified;
     }catch(error){this.audit({event:'unverified',at:this.clock(),account,steamId,appid});throw error;}
   }
 }

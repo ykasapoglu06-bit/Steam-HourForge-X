@@ -14,6 +14,8 @@ import {
   QRLoginTimeoutError,
   readSavedToken,
   persistToken,
+  loginError,
+  type AuthChallenge,
 } from "./auth.js";
 import { log as rootLog } from "./logger.js";
 
@@ -65,6 +67,12 @@ export interface AccountState {
   avatarUrl: string | null;
   displayName: string | null;
   vanityUrl: string | null;
+  loginMethod: 'credentials'|'qr';
+  authPhase: 'idle'|'credentials'|'qr'|'guard'|'steam';
+  authChallenge: AuthChallenge|null;
+  authError: string|null;
+  cardSessionDrops:number;
+  cardStartedAt:number|null;
 }
 
 export type ClaimConflictCheck = (
@@ -99,6 +107,13 @@ export class SteamAccount extends EventEmitter {
   private authAbort: AbortController | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private sessionGeneration = 0;
+  private loginPromise:Promise<void>|null=null;
+  private credentials:{accountName:string;password:string}|null=null;
+  private guardSubmit:((code:string)=>Promise<void>)|null=null;
+  private guardBusy=false;
+  private samFinishedAt=0;
+  private lastCardCounts=new Map<number,number>();
+  private currentCardAppid:number|null=null;
   private achievementsPending = new Map<number,Promise<unknown>>();
 
   private static readonly MAX_BACKOFF_MS = 600_000;
@@ -154,6 +169,8 @@ export class SteamAccount extends EventEmitter {
       nextBatchAt: null,
       lastReportedAt: null,
       queue: [], nextGames: [], manualGames: config.manualGames.map(game=>game.appid), achievements: {}, samBusy:false,avatarUrl:null,displayName:null,vanityUrl:null,
+      loginMethod:config.loginMethod,authPhase:'idle',authChallenge:null,authError:null,
+      cardSessionDrops:0,cardStartedAt:null,
     };
 
     Object.assign(this.state,readProfile(settings.dataDirectory,config.name));
@@ -163,6 +180,30 @@ export class SteamAccount extends EventEmitter {
 
   getState(): Readonly<AccountState> {
     return this.state;
+  }
+
+  async beginLogin(method:'credentials'|'qr',credentials?:{accountName:string;password:string}):Promise<void>{
+    if(Date.now()<this.rateLimitedUntil)throw new Error('AUTH_RATE_LIMIT');
+    if(this.state.connectedSince&&['farming','paused','online'].includes(this.state.status))throw new Error('ACCOUNT_ALREADY_CONNECTED');
+    await this.stop();
+    clearSavedToken(this.config.name,this.settings.dataDirectory);
+    this.config.password=undefined;this.config.sharedSecret=undefined;this.config.loginMethod=method;
+    if(credentials)this.config.accountName=credentials.accountName;
+    this.credentials=credentials??null;this.state.loginMethod=method;this.state.authError=null;this.state.lastError=null;
+    this.state.steamId=null;this.state.steamAccountName=credentials?.accountName??null;
+    this.state.avatarUrl=null;this.state.displayName=null;this.state.vanityUrl=null;
+    this.state.library=[];this.state.achievements={};this.state.gamesPlaying=[];
+    this.state.queue=[];this.state.nextGames=[];this.state.cardQueue=[];this.allGames=[];
+    this.lastCardCounts.clear();this.state.cardSessionDrops=0;this.state.cardStartedAt=null;this.currentCardAppid=null;
+    clearProfile(this.settings.dataDirectory,this.config.name);
+    void this.start().catch(()=>{this.state.authError='AUTH_UNAVAILABLE';});
+  }
+
+  async submitGuardCode(code:string):Promise<void>{
+    if(this.state.authPhase!=='guard'||!this.guardSubmit)throw new Error('AUTH_EXPIRED');
+    if(this.guardBusy)throw new Error('REQUEST_BUSY');
+    this.guardBusy=true;
+    try{await this.guardSubmit(code);this.state.authError=null;}catch(error){throw new Error(loginError(error));}finally{this.guardBusy=false;}
   }
 
   setPreferences(preferences: { priorityGames: number[]; rotationMinutes: number; label: string }): void {
@@ -239,16 +280,26 @@ export class SteamAccount extends EventEmitter {
     if(!this.state.steamId||!this.state.connectedSince||this.stopped)throw new Error('ACCOUNT_OFFLINE');
     if(!this.state.library.some(game=>game.appid===appid))throw new Error('SAM_NOT_OWNED');
     if(this.state.samBusy)throw new Error('REQUEST_BUSY');
+    if(this.steamBlocked&&Date.now()-this.samFinishedAt<3000){const until=Date.now()+3000;while(this.steamBlocked&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}
     if(this.steamBlocked)throw new Error('SAM_GAME_RUNNING');
-    const generation=this.sessionGeneration,steamId=this.state.steamId;
+    const steamId=this.state.steamId,wasStarted=this.started,manualPaused=this.state.manualPaused;
     this.state.samBusy=true;
-    this.client.gamesPlayed([]);
     try{
+      const disconnected=this.client.steamID?new Promise<void>((resolve,reject)=>{
+        const done=()=>{clearTimeout(timer);resolve();};
+        const timer=setTimeout(()=>{this.client.removeListener('disconnected',done);reject(new Error('SAM_SESSION_RELEASE_FAILED'));},8000);
+        this.client.once('disconnected',done);
+      }):Promise.resolve();
+      await this.stop();await disconnected;
       const result=await operation(steamId);
-      if(!this.stopped&&generation===this.sessionGeneration)this.state.achievements[appid]={unlocked:result.unlocked,total:result.total,checkedAt:Date.now()};
+      this.state.achievements[appid]={unlocked:result.unlocked,total:result.total,checkedAt:Date.now()};
       return result;
     }finally{
-      this.state.samBusy=false;this.state.lastReportedAt=null;this.refreshGames();
+      this.state.lastReportedAt=null;
+      this.samFinishedAt=Date.now();
+      this.state.manualPaused=manualPaused;this.state.isPaused=manualPaused;
+      try{if(wasStarted){await this.start();const until=Date.now()+10000;while(!this.state.connectedSince&&this.state.status==='connecting'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,100));}}
+      finally{this.state.samBusy=false;this.refreshGames();}
     }
   }
 
@@ -258,6 +309,7 @@ export class SteamAccount extends EventEmitter {
     this.config.password=undefined;this.config.sharedSecret=undefined;this.config.accountName=undefined;this.config.loginMethod='qr';
     this.state.steamId=null;this.state.steamAccountName=null;this.state.gamesPlaying=[];
     this.state.cardQueue=[];this.state.cardCheckedAt=null;this.state.cardStatus='waiting';this.state.cardError=null;
+    this.lastCardCounts.clear();this.state.cardSessionDrops=0;this.state.cardStartedAt=null;this.currentCardAppid=null;
     this.state.achievements={};this.state.lastError=null;this.state.lastReportedAt=null;
     this.state.queue=[];this.state.nextGames=[];this.state.nextBatchAt=null;
     this.state.batchCount=0;this.state.batchIndex=0;
@@ -301,7 +353,7 @@ export class SteamAccount extends EventEmitter {
   }
 
   nextBatch(): void {
-    if (this.state.mode !== "hours") throw new Error("Grup değiştirmek için saat modunu seç.");
+    if (this.state.mode !== "hours"&&this.state.cardQueue.length) throw new Error("Kartlar bitene kadar mevcut oyun açık kalır.");
     this.batchIndex++;
     this.batchStartedAt = Date.now();
     this.refreshGames();
@@ -316,6 +368,8 @@ export class SteamAccount extends EventEmitter {
     try {
       const queue=await readCardQueue(this.state.steamId, this.webCookies);
       if(this.stopped||generation!==this.sessionGeneration)return;
+      for(const [appid,remaining] of this.lastCardCounts){const next=queue.find(game=>game.appid===appid)?.remaining??0;this.state.cardSessionDrops+=Math.max(0,remaining-next);}
+      this.lastCardCounts=new Map(queue.map(game=>[game.appid,game.remaining]));
       this.state.cardQueue = queue;
       this.state.cardStatus = "ready";
       this.state.cardCheckedAt = Date.now();
@@ -355,6 +409,9 @@ export class SteamAccount extends EventEmitter {
     this.started = false;
     this.state.enabled = false;
     this.authAbort?.abort();
+    if(this.loginPromise)await this.loginPromise;
+    this.guardSubmit=null;this.guardBusy=false;this.credentials=null;
+    this.state.authPhase='idle';this.state.authChallenge=null;this.state.authError=null;
     this.state.qrCode = null;
     this.state.qrExpiresAt = null;
     this.state.lastReportedAt=null;
@@ -374,7 +431,14 @@ export class SteamAccount extends EventEmitter {
     this.log.info("Logged off");
   }
 
-  private async logOn(): Promise<void> {
+  private logOn():Promise<void>{
+    if(this.loginPromise)return this.loginPromise;
+    const task=this.performLogOn();this.loginPromise=task;
+    void task.finally(()=>{if(this.loginPromise===task)this.loginPromise=null;}).catch(()=>{});
+    return task;
+  }
+
+  private async performLogOn(): Promise<void> {
     if (this.stopped) return;
     if (this.wasSkipped || this.isAuthenticating) return;
     if (this.state.status === "farming") return;
@@ -395,7 +459,9 @@ export class SteamAccount extends EventEmitter {
       }
     }
 
-    this.updateState({ status: "connecting" });
+    const saved=readSavedToken(join(this.settings.dataDirectory,'tokens',`${this.config.name}.txt`));
+    if(this.config.loginMethod==='credentials'&&!this.credentials&&!this.config.password&&!saved){this.updateState({status:'offline',authPhase:'idle'});return;}
+    this.updateState({ status: "connecting",lastError:null,authError:null,authPhase:saved?'steam':this.config.loginMethod==='qr'?'qr':'credentials' });
     this.lastLogOnTime = Date.now();
     this.isAuthenticating = true;
     this.log.info("Connecting to Steam...");
@@ -403,11 +469,12 @@ export class SteamAccount extends EventEmitter {
     try {
       this.authAbort = new AbortController();
       const { refreshToken, accountName } = await authenticate(
-        this.config,
+        this.credentials?{...this.config,...this.credentials}:this.config,
         this.settings.dataDirectory,
         this.settings.qrLoginTimeoutMs,
         {
           signal: this.authAbort.signal,
+          onGuard:(challenge,submit)=>{if(!this.stopped){this.state.authPhase='guard';this.state.authChallenge=challenge;this.guardSubmit=submit;}},
           onQR: async url => {
             const image = await QRCode.toDataURL(url, { width: 300, margin: 4 });
             if (!this.stopped) {
@@ -418,6 +485,7 @@ export class SteamAccount extends EventEmitter {
         },
       );
       if (this.stopped) return;
+      this.state.authPhase='steam';this.state.authChallenge=null;this.guardSubmit=null;
 
       const resolvedAccountName = accountName ?? this.state.steamAccountName;
       if (resolvedAccountName && this.claimCheck) {
@@ -443,14 +511,16 @@ export class SteamAccount extends EventEmitter {
         this.wasSkipped = true;
         this.log.warn({ err: message }, "QR login timed out; skipping account for this run");
         this.updateState({ status: "skipped", lastError: message });
+        this.state.authError='AUTH_TIMEOUT';
         return;
       }
 
-      this.log.error({ err: message }, "Authentication failed");
-      this.updateState({ status: "error", lastError: message });
-      this.scheduleReconnect();
+      const code=loginError(err);this.log.warn({code}, "Authentication failed");
+      this.updateState({ status: "error", lastError: code,authError:code });
     } finally {
       this.isAuthenticating = false;
+      this.credentials=null;this.guardSubmit=null;this.state.authChallenge=null;
+      if(this.state.authPhase!=='steam')this.state.authPhase='idle';
       this.state.qrCode = null;
       this.state.qrExpiresAt = null;
     }
@@ -545,7 +615,7 @@ export class SteamAccount extends EventEmitter {
 
       if (err.eresult === SteamUser.EResult.RateLimitExceeded) {
         this.rateLimitedUntil = Date.now() + 31 * 60_000;
-        this.updateState({ status: "rate_limited", lastError: "Rate limited" });
+        this.updateState({ status: "rate_limited", lastError: "Rate limited",authPhase:'idle',authError:'AUTH_RATE_LIMIT' });
         this.log.warn("Rate limited - retrying in 31 minutes");
         return;
       }
@@ -560,7 +630,7 @@ export class SteamAccount extends EventEmitter {
         this.log.warn("Refresh token rejected - will re-authenticate");
       }
 
-      this.updateState({ status: "error", lastError: err.message });
+      this.updateState({ status: "error", lastError: err.message,authPhase:'idle',authError:'AUTH_UNAVAILABLE' });
       this.log.error({ err: err.message, eresult: err.eresult }, "Steam error");
       this.scheduleReconnect();
     });
@@ -596,6 +666,8 @@ export class SteamAccount extends EventEmitter {
     if (this.state.mode === "cards" && this.state.cardQueue.length) {
       this.state.gamesPlaying = [this.state.cardQueue[0]!.appid];
     }
+    const currentCard=cardActive?this.state.cardQueue[0]!.appid:null;
+    if(currentCard!==this.currentCardAppid){this.currentCardAppid=currentCard;this.state.cardStartedAt=currentCard?Date.now():null;}
     this.state.batchCount = count;
     this.state.batchIndex = this.state.batchCount ? this.batchIndex % this.state.batchCount : 0;
     this.state.nextBatchAt = !cardActive && count > 1 ? this.batchStartedAt + rotationMs : null;

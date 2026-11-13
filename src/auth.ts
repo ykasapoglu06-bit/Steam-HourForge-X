@@ -1,4 +1,4 @@
-import { LoginSession, EAuthTokenPlatformType } from "steam-session";
+import { LoginSession, EAuthTokenPlatformType, EAuthSessionGuardType } from "steam-session";
 import SteamTotp from "steam-totp";
 import qrcode from "qrcode-terminal";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
@@ -16,6 +16,17 @@ export interface AuthResult {
 export interface AuthOptions {
   onQR?: (url: string) => void | Promise<void>;
   signal?: AbortSignal;
+  onGuard?: (challenge: AuthChallenge, submit: (code: string) => Promise<void>) => void;
+}
+export interface AuthChallenge { methods: ('email'|'authenticator'|'approval')[] }
+
+export function loginError(err:unknown):string {
+  const code=(err as {eresult?:number})?.eresult;
+  if(code===5)return 'AUTH_INVALID_CREDENTIALS';
+  if(code===84)return 'AUTH_RATE_LIMIT';
+  if(code===65||code===88)return 'AUTH_GUARD_INVALID';
+  const message=err instanceof Error?err.message:'';
+  return ['LOGIN_CANCELLED','AUTH_TIMEOUT','AUTH_EXPIRED'].includes(message)?message:'AUTH_UNAVAILABLE';
 }
 
 export class QRLoginTimeoutError extends Error {
@@ -67,33 +78,48 @@ async function loginWithCredentials(account: AccountConfig, options: AuthOptions
   session.loginTimeout = LOGIN_TIMEOUT_MS;
   options.signal?.throwIfAborted();
 
-  const startResult = await session.startWithCredentials({
-    accountName: account.accountName,
-    password: account.password,
+  return waitForSession(session,account.accountName,options,async()=>{
+    const startResult = await session.startWithCredentials({
+    accountName: account.accountName!,
+    password: account.password!,
     steamGuardCode: account.sharedSecret
       ? SteamTotp.generateAuthCode(account.sharedSecret)
       : undefined,
-  });
-
-  if (startResult.actionRequired) {
-    log.info({ account: account.name }, "Steam Guard approval required...");
-  }
-
-  if (options.signal?.aborted) { session.cancelLoginAttempt(); options.signal.throwIfAborted(); }
-  let abort: (() => void) | undefined;
-  return new Promise<AuthResult>((resolve, reject) => {
-    abort = () => { session.cancelLoginAttempt(); reject(new Error("LOGIN_CANCELLED")); };
-    options.signal?.addEventListener("abort", abort, { once: true });
-    session.on("authenticated", () => {
-      if (!session.refreshToken) return reject(new Error("No refresh token received"));
-      resolve({
-        refreshToken: session.refreshToken,
-        accountName: session.accountName || account.accountName,
-      });
     });
-    session.on("timeout", () => reject(new Error("Login timed out")));
-    session.on("error", (err) => reject(err));
-  }).finally(() => { if (abort) options.signal?.removeEventListener("abort", abort); });
+    if(options.signal?.aborted)return;
+    if(startResult.actionRequired){
+      const methods:AuthChallenge['methods']=[];
+      for(const action of startResult.validActions??[]){
+        if(action.type===EAuthSessionGuardType.EmailCode)methods.push('email');
+        if(action.type===EAuthSessionGuardType.DeviceCode)methods.push('authenticator');
+        if(action.type===EAuthSessionGuardType.DeviceConfirmation||action.type===EAuthSessionGuardType.EmailConfirmation)methods.push('approval');
+      }
+      options.onGuard?.({methods:[...new Set(methods)]},async(code)=>{
+        if(options.signal?.aborted)throw new Error('AUTH_EXPIRED');
+        await session.submitSteamGuardCode(code);
+      });
+    }
+  });
+}
+
+// Register handlers before starting: accounts without Guard can authenticate immediately.
+function waitForSession(session:LoginSession,fallback:string|undefined,options:AuthOptions,start:()=>Promise<void>,timeout:()=>Error=()=>new Error('AUTH_TIMEOUT')):Promise<AuthResult>{
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const cleanup=()=>{options.signal?.removeEventListener('abort',abort);session.removeListener('authenticated',authenticated);session.removeListener('timeout',timedOut);session.removeListener('error',failed);};
+    const finish=(error?:unknown)=>{
+      if(settled)return;settled=true;cleanup();
+      if(error){session.cancelLoginAttempt();reject(error);}else resolve({refreshToken:session.refreshToken,accountName:session.accountName||fallback});
+    };
+    const authenticated=()=>finish(session.refreshToken?undefined:new Error('AUTH_UNAVAILABLE'));
+    const timedOut=()=>finish(timeout());
+    const failed=(error:Error)=>finish(error);
+    const abort=()=>finish(new Error('LOGIN_CANCELLED'));
+    session.on('authenticated',authenticated);session.on('timeout',timedOut);session.on('error',failed);
+    options.signal?.addEventListener('abort',abort,{once:true});
+    if(options.signal?.aborted){abort();return;}
+    void start().catch(failed);
+  });
 }
 
 async function loginWithQR(accountName: string, timeoutMs: number, options: AuthOptions): Promise<AuthResult> {
@@ -101,7 +127,9 @@ async function loginWithQR(accountName: string, timeoutMs: number, options: Auth
   session.loginTimeout = timeoutMs;
   options.signal?.throwIfAborted();
 
+  return waitForSession(session,undefined,options,async()=>{
   const startResult = await session.startWithQR();
+  if(options.signal?.aborted)return;
   if (!startResult.qrChallengeUrl) {
     throw new Error("Failed to retrieve QR code challenge URL from Steam");
   }
@@ -110,32 +138,7 @@ async function loginWithQR(accountName: string, timeoutMs: number, options: Auth
   qrcode.generate(startResult.qrChallengeUrl, { small: true });
   try { await options.onQR?.(startResult.qrChallengeUrl); }
   catch (err) { session.cancelLoginAttempt(); throw err; }
-  if (options.signal?.aborted) { session.cancelLoginAttempt(); options.signal.throwIfAborted(); }
-
-  let abort: (() => void) | undefined;
-  return new Promise<AuthResult>((resolve, reject) => {
-    abort = () => { session.cancelLoginAttempt(); reject(new Error("LOGIN_CANCELLED")); };
-    options.signal?.addEventListener("abort", abort, { once: true });
-    session.on("remoteInteraction", () => {
-      log.info({ account: accountName }, "QR scanned - approve the login on your phone");
-    });
-
-    session.on("authenticated", () => {
-      if (!session.refreshToken) return reject(new Error("No refresh token received"));
-      const resolvedAccount = session.accountName || session.steamID?.toString();
-      log.debug(
-        { account: accountName, steamAccount: resolvedAccount, steamID: session.steamID?.toString() },
-        "QR authentication successful",
-      );
-      resolve({
-        refreshToken: session.refreshToken,
-        accountName: session.accountName,
-      });
-    });
-
-    session.on("timeout", () => reject(new QRLoginTimeoutError(timeoutMs)));
-    session.on("error", (err) => reject(err));
-  }).finally(() => { if (abort) options.signal?.removeEventListener("abort", abort); });
+  },()=>new QRLoginTimeoutError(timeoutMs));
 }
 
 export function readSavedToken(tokenPath: string): AuthResult | null {
