@@ -2,8 +2,17 @@ import { expect,it,vi } from 'vitest';
 import { SamService,type SamRunner } from '../src/sam.js';
 const steamId='76561198000000000';
 const snapshot={steamId,appid:620,unlocked:1,total:2,achievements:[{id:'FIRST',name:'First',unlocked:true},{id:'SECOND',name:'Second',unlocked:false}]};
+it('restricts selected achievements to the preview and verifies them in a fresh read',async()=>{
+ const runner=vi.fn<SamRunner>().mockResolvedValueOnce(snapshot).mockResolvedValueOnce({...snapshot,stored:true,completed:1,rejected:0}).mockResolvedValueOnce(snapshot);
+ const service=new SamService(runner),preview=await service.preview('main',steamId,620);
+ await expect(service.complete('main',steamId,620,preview.nonce!,true,['FIRST'])).rejects.toThrow('SAM_PREVIEW_CHANGED');
+ const result=await service.complete('main',steamId,620,preview.nonce!,true,['SECOND']);
+ expect(runner.mock.calls[1]![0].ids).toEqual(['SECOND']);expect(runner.mock.calls[2]![0].operation).toBe('inspect');
+ expect(result.completed).toBe(0);expect(result.rejected).toBe(1);
+});
 it('only completes the previewed missing IDs after a game/account-bound confirmation',async()=>{
   const runner=vi.fn<SamRunner>().mockResolvedValueOnce(snapshot).mockResolvedValueOnce({...snapshot,unlocked:2,completed:1,rejected:0,stored:true,achievements:snapshot.achievements.map(row=>({...row,unlocked:true}))});
+  runner.mockResolvedValueOnce({...snapshot,unlocked:2,achievements:snapshot.achievements.map(row=>({...row,unlocked:true}))});
   const service=new SamService(runner);const preview=await service.preview('main',steamId,620);
   expect(runner.mock.calls[0]![0].operation).toBe('inspect');
   await expect(service.complete('other',steamId,620,preview.nonce!,true)).rejects.toThrow('SAM_PREVIEW_EXPIRED');

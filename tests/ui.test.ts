@@ -4,12 +4,44 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 let dom:any;
 afterEach(()=>{dom?.window.close();vi.unstubAllGlobals();vi.restoreAllMocks();});
+it('offers password login first, retries Guard codes, clears secrets and keeps errors scoped',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});
+ dom.window.scrollTo=()=>{};
+ const a:any={name:'second',label:'Second account',status:'offline',steamId:null,steamAccountName:null,connectedSince:null,authPhase:'idle',authChallenge:null,authError:null,gamesPlaying:[],library:[],priorityGames:[],manualGames:[],queue:[],nextGames:[],cardQueue:[],cardStatus:'waiting',rotationMinutes:30,mode:'hours',achievements:{}};
+ const calls:any[]=[];let wrong=true;
+ const fetchMock=vi.fn(async(path:string,options?:any)=>{
+   if(!options?.method)return new Response(JSON.stringify({accounts:[a]}));
+   const data=JSON.parse(options.body);calls.push({path,data});
+   if(path==='/api/login'){a.status='connecting';a.authPhase='guard';a.authChallenge={methods:['email']};return new Response('{"ok":true}');}
+   if(path==='/api/guard'&&wrong){wrong=false;return new Response('{"error":"AUTH_GUARD_INVALID"}',{status:400});}
+   if(path==='/api/guard'){a.authPhase='steam';a.authChallenge=null;}
+   return new Response('{"ok":true}');
+ });
+ for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:()=>0,confirm:()=>true}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');
+ const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('loginPanel').hidden).toBe(false));
+ expect($('credentialsPane').hidden).toBe(false);expect($('qrPane').hidden).toBe(true);expect($('hero').hidden).toBe(true);expect($('stats').hidden).toBe(true);expect($('pauseAll').disabled).toBe(true);
+ $('steamUsername').value='test-user';$('steamPassword').value='secret-password';$('togglePassword').click();expect($('steamPassword').type).toBe('text');
+ $('credentialsForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+ await vi.waitFor(()=>expect($('guardPane').hidden).toBe(false));await vi.waitFor(()=>expect($('steamPassword').value).toBe(''));
+ expect(calls[0]).toEqual({path:'/api/login',data:{name:'second',method:'credentials',accountName:'test-user',password:'secret-password'}});expect(JSON.stringify(dom.window.localStorage)).not.toContain('secret-password');
+ $('guardCode').value='WRONG';$('guardForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+ await vi.waitFor(()=>expect($('authError').textContent).toContain('Kod yanlış'));expect($('toast').hidden).toBe(true);
+ $('guardCode').value='ABCDE';$('guardForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+ await vi.waitFor(()=>expect($('guardPane').hidden).toBe(true));expect($('guardCode').value).toBe('');
+ expect(calls.filter(c=>c.path==='/api/login')).toHaveLength(1);
+ dom.window.document.querySelector('[data-view="accounts"]').click();expect($('loginPanel').hidden).toBe(true);
+});
 it("renders collapsed lists, priority selection, queue, achievements and sign-out controls",async()=>{
   dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});
   // jsdom does not implement the browser's native dialog open/close methods.
   dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
   dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  const a:any={name:'main',label:'Main',status:'farming',enabled:true,priorityGames:[730],rotationMinutes:30,qrCode:null,qrExpiresAt:null,libraryRefreshing:false,libraryCheckedAt:Date.now(),libraryError:null,steamAccountName:'Player',steamId:'76561198000000000',gamesPlaying:[730,620],isPaused:false,lastError:null,connectedSince:new Date().toISOString(),mode:'hours',manualPaused:false,library:[{appid:730,name:'CS2',playtimeMinutes:60},{appid:620,name:'Portal 2',playtimeMinutes:0},{appid:440,name:'Team Fortress 2',playtimeMinutes:0}],cardStatus:'ready',cardQueue:[],cardCheckedAt:Date.now(),cardError:null,batchIndex:0,batchCount:2,nextBatchAt:Date.now()+1800000,lastReportedAt:Date.now(),queue:[[730,620],[730,440]],nextGames:[730,440],manualGames:[],achievements:{}};
+  dom.window.scrollTo=()=>{};
+ const a:any={name:'main',label:'Main',status:'farming',enabled:true,priorityGames:[730],rotationMinutes:30,qrCode:null,qrExpiresAt:null,libraryRefreshing:false,libraryCheckedAt:Date.now(),libraryError:null,steamAccountName:'Player',steamId:'76561198000000000',gamesPlaying:[730,620],isPaused:false,lastError:null,connectedSince:new Date().toISOString(),mode:'hours',manualPaused:false,library:[{appid:730,name:'CS2',playtimeMinutes:60},{appid:620,name:'Portal 2',playtimeMinutes:0},{appid:440,name:'Team Fortress 2',playtimeMinutes:0}],cardStatus:'ready',cardQueue:[],cardCheckedAt:Date.now(),cardError:null,batchIndex:0,batchCount:2,nextBatchAt:Date.now()+1800000,lastReportedAt:Date.now(),queue:[[730,620],[730,440]],nextGames:[730,440],manualGames:[],achievements:{}};
   a.avatarUrl='https://avatars.steamstatic.com/test_full.jpg';a.displayName='Steam Player';a.vanityUrl='yuu55uuf';
   const calls:{path:string;body:any}[]=[];
   const fetchMock=vi.fn(async(path:string,options?:any)=>{
@@ -72,3 +104,4 @@ it("renders collapsed lists, priority selection, queue, achievements and sign-ou
   await vi.waitFor(()=>expect($('hours').disabled).toBe(false));
   expect(dom.window.document.querySelector('[data-i18n="cardRewardNote"]')).toBeNull();
 });
+

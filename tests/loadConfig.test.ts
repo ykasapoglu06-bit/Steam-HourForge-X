@@ -35,10 +35,10 @@ describe("loadConfig()", () => {
     process.env = originalEnv;
   });
 
-  it("starts a new installation with a full-library QR account and no credentials", () => {
+  it("starts a new installation with a full-library account and an interactive credential form", () => {
     const config=loadConfig();
     expect(config.accounts[0]!.games).toEqual(['ALL']);
-    expect(config.accounts[0]!.loginMethod).toBe('qr');
+    expect(config.accounts[0]!.loginMethod).toBe('credentials');
     expect(config.accounts[0]!.password).toBeUndefined();
   });
 

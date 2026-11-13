@@ -23,6 +23,30 @@ import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 
 describe("SteamAccount", () => {
+  it('plays one eligible card game and returns to the priority hours queue when cards run out',()=>{
+    const config=ConfigSchema.parse({accounts:[{name:'card-return',games:['ALL'],priorityGames:[730]}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+    internal.allGames=[730,440];Object.assign(internal.state,{status:'farming',connectedSince:new Date(),steamId:'76561198000000000',mode:'cards',cardQueue:[{appid:440,name:'TF2',remaining:2}]});
+    vi.spyOn(internal.client,'gamesPlayed').mockImplementation(()=>{});internal.refreshGames();
+    expect(account.getState().gamesPlaying).toEqual([440]);expect(account.getState().cardStartedAt).toBeTypeOf('number');
+    internal.state.cardQueue=[];internal.refreshGames();
+    expect(account.getState().gamesPlaying).toEqual([730,440]);expect(account.getState().cardStartedAt).toBeNull();
+    expect(()=>account.nextBatch()).not.toThrow();
+  });
+  it('switches a pending QR attempt to credentials without storing the password in configuration or status',async()=>{
+    const config=ConfigSchema.parse({accounts:[{name:'login-switch',games:['ALL'],loginMethod:'qr'}]});
+    const account=new SteamAccount(config.accounts[0]!,config.settings),client=(account as any).client;
+    vi.spyOn(client,'logOff').mockImplementation(()=>{});vi.spyOn(client,'gamesPlayed').mockImplementation(()=>{});vi.spyOn(client,'logOn').mockImplementation(()=>{});
+    authenticateMock.mockImplementationOnce(async(_c,_d,_t,options)=>new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('LOGIN_CANCELLED')),{once:true})));
+    const qr=account.start();await vi.waitFor(()=>expect(authenticateMock).toHaveBeenCalled());
+    let finish:any;authenticateMock.mockImplementationOnce(async()=>new Promise(resolve=>{finish=resolve;}));
+    await account.beginLogin('credentials',{accountName:'test-user',password:'secret-password'});await qr;
+    await vi.waitFor(()=>expect(authenticateMock).toHaveBeenCalledTimes(2));
+    expect(authenticateMock.mock.calls[1]![0].password).toBe('secret-password');
+    expect(JSON.stringify(config)).not.toContain('secret-password');expect(JSON.stringify(account.getState())).not.toContain('secret-password');
+    finish({refreshToken:'test-session',accountName:'test-user'});
+    await vi.waitFor(()=>expect(client.logOn).toHaveBeenCalledWith({refreshToken:'test-session'}));await account.stop();
+  });
   beforeEach(()=>{vi.spyOn(SteamUser.prototype,'getPersonas').mockResolvedValue({personas:{}});});
   it('loads the Steam photo and display name and rejects non-Steam avatar URLs',async()=>{
     const config=ConfigSchema.parse({accounts:[{name:'photo',games:[730]}]});
@@ -41,6 +65,8 @@ describe("SteamAccount", () => {
     const account=new SteamAccount(config.accounts[0]!,config.settings),client=(account as any).client;
     Object.assign((account as any).state,{steamId:'76561198000000000',connectedSince:new Date(),status:'farming',library:[{appid:730,name:'CS2',playtimeMinutes:0}]});
     vi.spyOn(client,'gamesPlayed').mockImplementation(()=>{});
+    (account as any).started=true;
+    vi.spyOn(account,'start').mockImplementation(async()=>{(account as any).started=true;(account as any).stopped=false;Object.assign((account as any).state,{connectedSince:new Date(),status:account.getState().manualPaused?'paused':'farming'});});
     await expect(account.desktopAchievements(730,async()=>{expect(account.getState().samBusy).toBe(true);throw new Error('SAM_STEAM_OFFLINE');})).rejects.toThrow('SAM_STEAM_OFFLINE');
     expect(account.getState().samBusy).toBe(false);expect(account.getState().lastReportedAt).toBeTypeOf('number');
     account.pause();

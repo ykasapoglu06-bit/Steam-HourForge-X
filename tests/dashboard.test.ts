@@ -2,6 +2,21 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 import { startDashboard } from "../src/dashboard.js";
 let server: Server;
+
+it('keeps credentials and Guard submissions local and never echoes secrets',async()=>{
+  const manager={getStates:()=>[],login:vi.fn(),guard:vi.fn()};
+  server=await startDashboard(manager as any,0);const url=`http://127.0.0.1:${(server.address() as any).port}`;
+  const body={name:'main',method:'credentials',accountName:'user',password:'private-test-password'};
+  for(const path of ['/api/login','/api/guard']){
+    expect((await fetch(url+path,{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify(body)})).status).toBe(403);
+  }
+  expect(manager.login).not.toHaveBeenCalled();expect(manager.guard).not.toHaveBeenCalled();
+  const response=await fetch(url+'/api/login',{method:'POST',headers:{Origin:url,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  expect(response.status).toBe(202);expect(await response.text()).not.toContain(body.password);
+  expect(manager.login).toHaveBeenCalledWith('main',body);
+  const code=await fetch(url+'/api/guard',{method:'POST',headers:{Origin:url,'Content-Type':'application/json'},body:JSON.stringify({name:'main',code:'ABCDE'})});
+  expect(code.status).toBe(200);expect(manager.guard).toHaveBeenCalledWith('main','ABCDE');
+});
 afterEach(async () => { if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } });
 it("serves live state and rejects controls from another website", async () => {
   const manager = { getStates: () => [{ name: "main", status: "farming", gamesPlaying: [730] }], control: vi.fn() };
