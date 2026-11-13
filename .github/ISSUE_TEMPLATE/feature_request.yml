@@ -1,0 +1,23 @@
+name: Feature request / Özellik önerisi
+description: Suggest a change in English or Turkish / Türkçe veya İngilizce özellik öner.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do? / Ne yapmak istiyorsun?
+      description: Describe the current difficulty without private account data / Gizli hesap verisi eklemeden mevcut zorluğu anlat.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior / Önerilen davranış
+      description: Explain the expected user flow / Beklediğin kullanım akışını anlat.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and context / Alternatifler ve bağlam
