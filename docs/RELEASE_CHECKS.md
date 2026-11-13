@@ -1,6 +1,6 @@
 # Release verification
 
-Version 2.3.0 adds Steam persona photos and names, Steam profile links, external profile shortcuts and a bilingual About page.
+Version 2.3.0 added Steam persona photos and names, Steam profile links, external profile shortcuts and a bilingual About page.
 
 Run automated checks:
 
@@ -22,3 +22,15 @@ The Linux Docker recipe is included, but a release should not claim a Docker ima
 
 Zod 4 uses `prefault` for nested settings defaults. Vitest 5 and Vite 8 replace the vulnerable legacy test toolchain. Transitive overrides select adm-zip 0.6.1+ and protobufjs 7.6.6+; the latter replaces steam-appticket’s older protobufjs 6 runtime, whose generated-message API remains compatible. Tests, native build and real Steam login/library reporting are checked after these changes. `npm audit` reports zero known vulnerabilities at preparation time; this is not a permanent security guarantee.
 
+
+## Version 2.4.0
+
+Interactive username/password sign-in, email/authenticator code retry on the same session, device/email approval and QR choice. A regression test reproduces the immediate no-Guard event race; listeners are now registered before authentication begins. Cancellation is awaited before changing methods. Dashboard passwords are ephemeral and never copied into persisted configuration or public account state. Login and Guard routes enforce the same exact local Host/Origin checks as other controls. Tests also verify masked/cleared inputs, disabled empty-account controls, inline Guard errors and account-scoped notices.
+
+UI review: compact sign-in workspace, consistent panel spacing, independent account-list scrolling, keyboard-accessible sign-in tabs, scoped achievement errors, dismissible notices, wrapped account actions, image fallbacks and responsive layouts. Real password sign-in requires the owner to enter their password locally; automated tests use simulated Steam sessions.
+
+### Achievement/card verification follow-up
+
+Fixed two real integration issues: unavailable community-page counts hid the local editor; overlapping desktop and farmer game sessions could block achievement writes. Windows now prefers native achievement reads, with a web fallback when the client is unavailable. The farmer disconnects for a native operation, waits for its session to release, and reconnects afterward, preserving manual pause and mode. Writes can select a subset of the preview; a separate native process rereads the result before success is reported. A real one-achievement write was verified end to end, and farming reconnected afterward. No bulk achievement write was performed.
+
+Cards-first runs one eligible game, shows the current game and remaining badge-page rights, and resumes the hours queue after rights are exhausted. Observed right decreases are tracked per process/account and are not an inventory or market-value guarantee. Automated tests cover the transition back to hours. At verification time a real account had 14 eligible games and 60 remaining rights; a new card drop was not independently observed during this short check.
