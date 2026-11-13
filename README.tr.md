@@ -64,7 +64,7 @@ npm start
 
 ## Programı tamamen kapat
 
-**Hepsini sürdür** yanındaki kırmızı güç simgeli **Programı kapat** düğmesini kullan. Tüm hesap işlemleri durur, yerel sunucu ve arka plandaki uygulama kapanır; hesaplar, kayıtlı girişler ve tercihler korunur. Sayfa kapanıyor/kapandı durumunu gösterir; tarayıcı sekmesini kendin kapatabilirsin. Tekrar kullanmak için uygulama kısayolunu aç. Yerel başarım işlemi sürerken kapatma geçici olarak kullanılamaz.
+**Hepsini sürdür** yanındaki kırmızı güç simgeli **Programı kapat** düğmesini kullan. Tüm hesap işlemleri durur, yerel sunucu ve arka plandaki uygulama kapanır; hesaplar, kayıtlı girişler ve tercihler korunur. Arka plan uygulaması durunca sayfa kendi sekmesini kapatmayı dener. Tarayıcı izin vermezse kapandı ekranı kalır; sekmeyi kendin kapatabilirsin. Tekrar kullanmak için uygulama kısayolunu aç. Yerel başarım işlemi sürerken kapatma geçici olarak kullanılamaz.
 
 ## Giriş ve kayıtlı hesaplar
 

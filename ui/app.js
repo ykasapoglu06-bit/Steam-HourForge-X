@@ -2,7 +2,7 @@ import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
-const APP_VERSION='2.4.7';
+const APP_VERSION='2.4.8';
 let versionMismatch=false;
 function showVersionError(){
   versionMismatch=true;
@@ -363,6 +363,7 @@ async function checkShutdown(){
   }catch(error){
     if(error.name==='TimeoutError'||error.name==='AbortError'){shutdownPollTimer=setTimeout(checkShutdown,500);return;}
     appClosed=true;shutdownPollTimer=null;render();
+    try{window.close();}catch{/* Browser-owned tabs can refuse script closing; keep the closed screen. */}
   }
 }
 $('shutdownApp').onclick=async()=>{

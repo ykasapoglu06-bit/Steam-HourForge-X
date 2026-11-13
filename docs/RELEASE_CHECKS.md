@@ -80,3 +80,14 @@ Proje sahibi görünen adı Joseph-06 olarak değiştirildi. Mevcut Steam profil
 ## Version 2.4.7
 
 91 tests pass: six-view three-account navigation, long names, bilingual state, mismatched HTML/backend recovery and startup asset snapshot regression coverage. Windows TypeScript/native build passes; npm audit reports zero known vulnerabilities. Browser access unavailable for this chat; mobile layout is implemented and source/DOM checked, but no new visual/device pass is claimed. The older v2.4.2 runtime mismatch was observed directly before these changes.
+
+## v2.4.8
+
+### English
+
+Quit app now attempts to close its own browser tab after the background server has stopped. If browser policy blocks script closing, the closed screen remains with manual-close guidance. Other tabs/windows are not targeted. 92 automated tests and Windows build pass; both successful close invocation and blocked-close fallback are covered with mocks. Real browser auto-close was not verified in this chat.
+
+### Türkçe
+
+Programı kapat, arka plan sunucusu durduktan sonra kendi tarayıcı sekmesini kapatmayı dener. Tarayıcı betikle kapatmayı engellerse elle kapatma açıklamalı kapandı ekranı kalır. Diğer sekmeler/pencereler hedeflenmez. 92 otomatik test ve Windows derlemesi başarılı; kapatma çağrısı ve engellenme durumundaki alternatif ekran taklitlerle kapsandı. Bu sohbette gerçek tarayıcı otomatik kapanması doğrulanmadı.
+

@@ -7,7 +7,7 @@ it('opens all six views with three accounts and long names without missing contr
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const accounts=Array.from({length:3},(_,i)=>({name:'demo-'+i,label:'Uzun hesap etiketi '+i,displayName:'A long display name with Türkçe İ ı '+i,status:'farming',connectedSince:Date.now(),steamId:'7656119800000000'+i,mode:'hours',gamesPlaying:[620],library:[{appid:620,name:'Long game title '+i,playtimeMinutes:120}],priorityGames:[620],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[[620]],nextGames:[],manualGames:[],achievements:{}}));
- for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.7'})),setInterval:()=>0}))vi.stubGlobal(key,value);
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.8'})),setInterval:()=>0}))vi.stubGlobal(key,value);
  vi.resetModules();
  // @ts-expect-error browser module is plain JavaScript.
  await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
@@ -37,8 +37,9 @@ it('stops polling and rendering after detecting incompatible backend versions',a
  await import('../ui/app.js');await vi.waitFor(()=>expect(dom.window.document.body.textContent).toContain('farklı sürümlerde'));
  for(const fn of intervals)await fn();expect(fetchMock).toHaveBeenCalledOnce();
 });
-it('quits the entire app once and stops polling when its server closes',async()=>{
+it.each([false,true])('closes its tab only after shutdown, retaining fallback when blocked (%s)',async(blockClose)=>{
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ const closeTab=vi.spyOn(dom.window,'close').mockImplementation(()=>{if(blockClose)throw new Error('Browser refused closing');});
  let closed=false;const calls:any[]=[];const clear=vi.fn();
  const fetchMock=vi.fn(async(path:string,options?:any)=>{if(path==='/api/shutdown'){calls.push(JSON.parse(options.body));closed=true;return new Response('{"ok":true}',{status:202});}if(closed)throw new TypeError('Failed to fetch');return new Response('{"accounts":[]}');});
  for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:()=>123,clearInterval:clear}))vi.stubGlobal(key,value);
@@ -48,7 +49,7 @@ it('quits the entire app once and stops polling when its server closes',async()=
  await vi.waitFor(()=>expect($('shutdownApp').disabled).toBe(false));$('shutdownApp').click();$('shutdownApp').click();
  await vi.waitFor(()=>expect($('shutdownTitle').textContent).toBe('Steam HourForge X kapandı'));
  expect(calls).toEqual([{confirmed:true}]);expect(clear).toHaveBeenCalledTimes(2);expect($('shutdownPanel').hidden).toBe(false);expect($('shutdownMessage').textContent).toContain('kayıtlı hesapların');
- expect($('shutdownApp').disabled).toBe(true);
+ expect($('shutdownApp').disabled).toBe(true);expect(closeTab).toHaveBeenCalledOnce();closeTab.mockRestore();
 });
 it('keeps keyboard focus on the selected login tab after its request finishes',async()=>{
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};

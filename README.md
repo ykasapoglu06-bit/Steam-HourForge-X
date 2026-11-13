@@ -64,7 +64,7 @@ In **Library**, star the games you want, then choose **Selected only** on the ac
 
 ## Close the entire app
 
-Use the red **Quit app** power button beside **Resume all**. It stops all account tasks, closes the local server and exits the background application, keeping saved accounts, sessions and preferences. The page shows closing/closed feedback; close the browser tab yourself. Open the application shortcut to return. Quitting is temporarily unavailable during a native achievement operation.
+Use the red **Quit app** power button beside **Resume all**. It stops all account tasks, closes the local server and exits the background application, keeping saved accounts, sessions and preferences. After the background app stops, the page tries to close its own tab. If browser policy refuses, the closed screen remains and you can close the tab yourself. Open the application shortcut to return. Quitting is temporarily unavailable during a native achievement operation.
 
 ## Sign-in and saved accounts
 
