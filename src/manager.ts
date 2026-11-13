@@ -86,6 +86,7 @@ export class AccountManager {
       if(typeof data.accountName!=='string'||!data.accountName.trim()||data.accountName.length>64||/[\x00-\x1f]/.test(data.accountName)||typeof data.password!=='string'||!data.password||data.password.length>256)throw new Error('AUTH_INVALID_INPUT');
       await this.find(name).beginLogin('credentials',{accountName:data.accountName.trim(),password:data.password});
     }else await this.find(name).beginLogin('qr');
+    this.config.accounts.find(account=>account.name===name)!.enabled=true;
     this.save();
   }
   async guard(name:string,code:unknown){if(typeof code!=='string'||! /^[a-zA-Z0-9]{5,8}$/.test(code))throw new Error('AUTH_GUARD_INVALID');await this.find(name).submitGuardCode(code);}

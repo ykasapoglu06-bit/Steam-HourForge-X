@@ -7,6 +7,12 @@ import { AccountManager } from "../src/manager.js";
 import { SteamAccount } from "../src/account.js";
 import { ConfigSchema } from "../src/config.js";
 const folders: string[]=[];
+it('remembers that a previously disconnected account was enabled by a new sign-in',async()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL'],enabled:false}],settings:{dataDirectory:join(path,'data')}});
+ const manager=new AccountManager(config,file);vi.spyOn(SteamAccount.prototype,'beginLogin').mockResolvedValue();
+ await manager.login('main',{method:'credentials',accountName:'user',password:'private-login-password'});
+ const saved=readFileSync(file,'utf8');expect(JSON.parse(saved).accounts[0].enabled).toBe(true);expect(saved).not.toContain('private-login-password');
+});
 it('removes only the selected local account, clears its login and allows an empty saved list',async()=>{
   const path=folder(),file=join(path,'config.json');
   const config=ConfigSchema.parse({accounts:[{name:'first',games:['ALL'],loginMethod:'credentials'},{name:'second',games:['ALL'],loginMethod:'credentials'}],settings:{dataDirectory:join(path,'data')}});
