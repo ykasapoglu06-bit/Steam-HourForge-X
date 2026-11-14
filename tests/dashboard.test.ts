@@ -76,3 +76,25 @@ it("protects account and preference routes and routes validated requests",async(
     expect(blocked.status).toBe(403);
   }
 });
+
+it('preserves UTF-8 names split across incoming network chunks',async()=>{
+ const {request}=await import('node:http');
+ const manager={getStates:()=>[],addAccount:vi.fn().mockReturnValue('new')};server=await startDashboard(manager as any,0);
+ const url=`http://127.0.0.1:${(server.address() as any).port}`,label='Türkçe İsim';
+ const body=Buffer.from(JSON.stringify({label})),split=body.indexOf(Buffer.from('ü'))+1;
+ const response=await new Promise<{status:number;body:string}>((resolve,reject)=>{
+  const req=request(url+'/api/accounts',{method:'POST',headers:{Origin:url,'Content-Type':'application/json'}},res=>{let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode!,body}));});
+  req.on('error',reject);req.write(body.subarray(0,split));setTimeout(()=>req.end(body.subarray(split)),20);
+ });
+ expect(response.status).toBe(201);expect(manager.addAccount).toHaveBeenCalledWith(label);
+});
+it('accepts a large achievement subset while retaining bounded request bodies',async()=>{
+ const manager={getStates:()=>[],completeAchievements:vi.fn().mockResolvedValue({completed:2000})};server=await startDashboard(manager as any,0);
+ const url=`http://127.0.0.1:${(server.address() as any).port}`;
+ const ids=Array.from({length:2000},(_,i)=>'ACHIEVEMENT_'+i.toString().padStart(5,'0'));
+ const body={name:'demo',appid:620,nonce:'a'.repeat(48),confirmed:true,ids};
+ const post=(path:string,body:unknown)=>fetch(url+path,{method:'POST',headers:{Origin:url,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ expect((await post('/api/achievement-complete',body)).status).toBe(200);expect(manager.completeAchievements).toHaveBeenCalledWith('demo',620,body.nonce,true,ids);
+ manager.completeAchievements.mockClear();expect((await post('/api/achievement-complete',{...body,padding:'x'.repeat(1024*1024)})).status).toBe(413);expect(manager.completeAchievements).not.toHaveBeenCalled();
+ expect((await post('/api/accounts',{label:'x'.repeat(9000)})).status).toBe(413);
+});

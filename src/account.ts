@@ -202,16 +202,23 @@ export class SteamAccount extends EventEmitter {
   }
 
   async submitGuardCode(code:string):Promise<void>{
+    if(Date.now()<this.rateLimitedUntil)throw new Error('AUTH_RATE_LIMIT');
     if(this.state.authPhase!=='guard'||!this.guardSubmit)throw new Error('AUTH_EXPIRED');
     if(this.guardBusy)throw new Error('REQUEST_BUSY');
     this.guardBusy=true;
-    try{await this.guardSubmit(code);this.state.authError=null;}catch(error){throw new Error(loginError(error));}finally{this.guardBusy=false;}
+    try{await this.guardSubmit(code);this.state.authError=null;}catch(error){
+      const reason=loginError(error);
+      if(reason==='AUTH_RATE_LIMIT'){this.rateLimitedUntil=Date.now()+31*60_000;this.state.authError=reason;}
+      throw new Error(reason);
+    }finally{this.guardBusy=false;}
   }
 
-  setPreferences(preferences: { priorityGames: number[]; rotationMinutes: number; label: string }): void {
+  setPreferences(preferences: { priorityGames: number[]; rotationMinutes: number; label: string }, persist?: (next: AccountConfig) => void): void {
     const priorities = [...new Set(preferences.priorityGames)];
     if (priorities.some(id => !this.state.library.some(game => game.appid === id))) throw new Error("PRIORITY_NOT_OWNED");
-    Object.assign(this.config, { ...preferences, priorityGames: priorities });
+    const changes = { ...preferences, priorityGames: priorities };
+    persist?.({...this.config, ...changes});
+    Object.assign(this.config, changes);
     this.state.priorityGames = priorities;
     this.state.rotationMinutes = preferences.rotationMinutes;
     this.state.label = preferences.label;
@@ -248,7 +255,7 @@ export class SteamAccount extends EventEmitter {
     } finally { this.state.libraryRefreshing = false; }
   }
 
-  async addGame(appid:number):Promise<void> {
+  async addGame(appid:number,persist?:(next:AccountConfig)=>void):Promise<void> {
     if(!this.state.connectedSince||this.stopped)throw new Error('ACCOUNT_OFFLINE');
     if(this.allGames.includes(appid))throw new Error('GAME_EXISTS');
     if(this.config.manualGames.length>=500)throw new Error('GAME_LIMIT');
@@ -260,6 +267,7 @@ export class SteamAccount extends EventEmitter {
     if(typeof name!=='string'||!name.trim())throw new Error('GAME_NOT_FOUND');
     if(this.allGames.includes(appid))throw new Error('GAME_EXISTS');
     const game={appid,name:name.slice(0,200)};
+    persist?.({...this.config,manualGames:[...this.config.manualGames,game]});
     this.config.manualGames.push(game);this.state.manualGames.push(appid);this.allGames.push(appid);
     this.state.library.push({...game,playtimeMinutes:0});this.refreshGames();
   }
@@ -532,7 +540,8 @@ export class SteamAccount extends EventEmitter {
       }
 
       const code=loginError(err);this.log.warn({code}, "Authentication failed");
-      this.updateState({ status: "error", lastError: code,authError:code });
+      if(code==='AUTH_RATE_LIMIT')this.rateLimitedUntil=Date.now()+31*60_000;
+      this.updateState({ status: code==='AUTH_RATE_LIMIT'?'rate_limited':'error', lastError: code,authError:code });
     } finally {
       this.isAuthenticating = false;
       this.credentials=null;this.guardSubmit=null;this.state.authChallenge=null;

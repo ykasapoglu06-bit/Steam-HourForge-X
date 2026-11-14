@@ -1,6 +1,26 @@
 # Changelog / Değişiklikler
 
 
+## v2.4.10
+
+### English
+
+- Ignore delayed achievement preview responses after the dialog is closed or another game is opened.
+- Refresh achievement-operation status in the account sidebar; announce the current account status to assistive technology.
+- Save new accounts, preferences, manual games and farming mode before applying them in memory. Report configuration write failures in both languages.
+- Decode UTF-8 request bodies only after all chunks arrive; retain byte limits. Achievement completion accepts subsets up to a bounded 1 MiB request, while other routes keep the 8 KiB limit.
+- Enforce the existing 31-minute backoff for Steam authentication and Guard rate-limit responses.
+- Validation: 103 automated tests, Windows TypeScript/native build and zero known production dependency vulnerabilities. Six tabs were checked in a browser with three demo accounts at 1366, 390 and 320 px; English navigation, mobile settings and achievement selection were also checked. No horizontal overflow or console errors were observed. No real achievements were modified during this audit. Physical mobile devices and live Docker were not tested.
+
+### Türkçe
+
+- Pencere kapatıldıktan veya başka oyun açıldıktan sonra gelen eski başarım önizleme yanıtları artık gösterilmez.
+- Sol hesap listesindeki başarım işlem durumu güncellenir; hesap durumu ekran okuyuculara da bildirilir.
+- Yeni hesaplar, tercihler, elle eklenen oyunlar ve çalışma modu belleğe uygulanmadan önce kaydedilir. Kayıt hataları iki dilde açıklanır.
+- Parçalı istekler tamamlandıktan sonra UTF-8 olarak okunur; Türkçe karakterler bozulmaz. Bayt sınırları korunur. Başarım seçimleri için sınır 1 MiB, diğer işlemler için 8 KiB olur.
+- Steam giriş ve Guard denemelerinde hız sınırı yanıtı gelirse mevcut 31 dakikalık bekleme süresi uygulanır.
+- Doğrulama: 103 otomatik test ve Windows TypeScript/yerel derlemesi başarılı; üretim bağımlılıklarında bilinen açık yok. Üç örnek hesapla altı sekme 1366, 390 ve 320 pikselde tarayıcıdan kontrol edildi; İngilizce gezinme, mobil ayarlar ve başarım seçimi de incelendi. Yatay taşma veya konsol hatası görülmedi. Bu incelemede gerçek başarımlar değiştirilmedi. Fiziksel mobil cihaz ve canlı Docker testi yapılmadı.
+
 ## v2.4.9
 
 ### English

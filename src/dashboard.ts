@@ -26,14 +26,22 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
       res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
       res.end(assets.get(req.url!)); return;
     }
-    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.9", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
+    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.10", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
     if(closing&&req.method==='POST'&&req.url!=='/api/shutdown')return json(503,{error:'APP_SHUTTING_DOWN'});
     if (req.method === "POST" && ["/api/shutdown", "/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
       if (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "LOCAL_ONLY" });
       try {
-        let body = "";
-        for await (const part of req) { body += part; if (body.length > 8192) return json(413, { error: "REQUEST_TOO_LARGE" }); }
-        const data = JSON.parse(body);
+        const chunks: Buffer[] = [];
+        const limit = req.url === '/api/achievement-complete' ? 1024 * 1024 : 8192;
+        let bytes = 0;
+        for await (const part of req) {
+          const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part);
+          bytes += chunk.length;
+          if (bytes > limit) return json(413, { error: "REQUEST_TOO_LARGE" });
+          chunks.push(chunk);
+        }
+        const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return json(400, { error: "INVALID_SETTINGS" });
         if(req.url==='/api/shutdown'){
           if(data?.confirmed!==true)return json(400,{error:'SHUTDOWN_CONFIRMATION_REQUIRED'});
           if(!onShutdown)return json(503,{error:'SHUTDOWN_UNAVAILABLE'});

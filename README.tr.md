@@ -141,7 +141,7 @@ Uygulamada analitik yoktur. Steam bağlantıları, görsel istekleri ve harici p
 
 ## Geliştirme ve katkı
 
-Arka uç TypeScript, arayüz sade JavaScript/CSS kullanır. Windows ve Linux derlemeleri [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml) üzerinde çalışır. v2.4.4 kontrollerinde **80 test** geçti; kapsam ve sınırlamalar [sürüm kontrollerinde](docs/RELEASE_CHECKS.md) yer alır.
+Arka uç TypeScript, arayüz sade JavaScript/CSS kullanır. Windows ve Linux derlemeleri [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml) üzerinde çalışır. v2.4.10 kontrollerinde **103 test** geçti; masaüstü ve mobil genişliklerde tarayıcı düzeni de incelendi; kapsam ve sınırlamalar [sürüm kontrollerinde](docs/RELEASE_CHECKS.md) yer alır.
 
 Hata ve özellik önerilerini **Türkçe veya İngilizce** yazabilirsin. Uygulama sürümünü, işletim sistemini ve tekrar etme adımlarını ekle. Şifre, giriş anahtarı, çerez, aktif QR kodu veya kişisel yapılandırmanı ekleme. [CONTRIBUTING.md](CONTRIBUTING.md) ve [son değişikliklere](docs/CHANGELOG.md) bakabilirsin.
 

@@ -109,3 +109,35 @@ it("allows equal display names on different Steam IDs but rejects duplicate Stea
   const second=(internal[1] as any).client;second.steamID={getSteamID64:()=> '76561198000000001'};second.emit('loggedOn');
   expect(manager.getStates()[1]!.status).toBe('skipped');
 });
+
+it('keeps failed account creation out of memory and disk and allows retry',()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file);
+ const before=readFileSync(file,'utf8'),start=vi.spyOn(SteamAccount.prototype,'start').mockResolvedValue();
+ vi.spyOn(manager as any,'save').mockImplementationOnce(()=>{throw new Error('CONFIG_SAVE_FAILED');});
+ expect(()=>manager.addAccount('New')).toThrow('CONFIG_SAVE_FAILED');expect(manager.count).toBe(0);expect(config.accounts).toHaveLength(0);expect(readFileSync(file,'utf8')).toBe(before);expect(start).not.toHaveBeenCalled();
+ manager.addAccount('New');expect(manager.count).toBe(1);expect(JSON.parse(readFileSync(file,'utf8')).accounts).toHaveLength(1);
+});
+it('does not apply preferences when saving the configuration fails',()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'main',label:'Before',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file);
+ manager.getStates()[0]!.library.push({appid:620,name:'Demo',playtimeMinutes:0});const before=readFileSync(file,'utf8');
+ vi.spyOn(manager as any,'save').mockImplementationOnce(()=>{throw new Error('CONFIG_SAVE_FAILED');});
+ const input={label:'After',priorityGames:[620],rotationMinutes:15};
+ expect(()=>manager.updatePreferences('main',input)).toThrow('CONFIG_SAVE_FAILED');expect(manager.getStates()[0]).toMatchObject({label:'Before',priorityGames:[],rotationMinutes:30});expect(config.accounts[0]).toMatchObject({label:'Before',priorityGames:[],rotationMinutes:30});expect(readFileSync(file,'utf8')).toBe(before);
+ manager.updatePreferences('main',input);expect(manager.getStates()[0]).toMatchObject(input);expect(JSON.parse(readFileSync(file,'utf8')).accounts[0]).toMatchObject(input);
+});
+
+it('keeps mode and manually added games unchanged if persistence fails',async()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL']}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file);
+ const account=(manager as any).accounts[0],internal=account as any;internal.stopped=false;internal.state.connectedSince=123;
+ vi.spyOn(internal.client,'getProductInfo').mockResolvedValue({apps:{620:{appinfo:{common:{name:'Demo'}}}}});
+ const before=readFileSync(file,'utf8'),save=vi.spyOn(manager as any,'save').mockImplementationOnce(()=>{throw new Error('CONFIG_SAVE_FAILED');});
+ await expect(manager.control('main','fixed')).rejects.toThrow('CONFIG_SAVE_FAILED');expect(manager.getStates()[0]!.mode).toBe('hours');expect(config.accounts[0]!.farmingMode).toBe('hours');expect(readFileSync(file,'utf8')).toBe(before);
+ save.mockImplementationOnce(()=>{throw new Error('CONFIG_SAVE_FAILED');});await expect(manager.addGame('main',620)).rejects.toThrow('CONFIG_SAVE_FAILED');expect(manager.getStates()[0]!.library).toHaveLength(0);expect(config.accounts[0]!.manualGames).toHaveLength(0);expect(readFileSync(file,'utf8')).toBe(before);
+ await manager.addGame('main',620);await manager.control('main','fixed');expect(JSON.parse(readFileSync(file,'utf8')).accounts[0]).toMatchObject({manualGames:[{appid:620,name:'Demo'}],farmingMode:'fixed'});
+});
+
+it('reports a real configuration write failure without publishing the new account',async()=>{
+ const {mkdirSync}=await import('node:fs');const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file);
+ const before=readFileSync(file,'utf8');mkdirSync(file+'.tmp');
+ expect(()=>manager.addAccount('Blocked')).toThrow('CONFIG_SAVE_FAILED');expect(manager.count).toBe(0);expect(readFileSync(file,'utf8')).toBe(before);expect(config.accounts).toHaveLength(0);
+});

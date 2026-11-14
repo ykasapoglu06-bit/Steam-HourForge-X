@@ -141,7 +141,7 @@ The app has no analytics. Steam connections, artwork requests and external profi
 
 ## Development and contributions
 
-The backend uses TypeScript and the interface uses plain JavaScript/CSS. Windows and Linux builds run in [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml). The v2.4.4 checks passed **80 tests**; see [release checks](docs/RELEASE_CHECKS.md) for scope and limitations.
+The backend uses TypeScript and the interface uses plain JavaScript/CSS. Windows and Linux builds run in [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml). The v2.4.10 checks passed **103 tests**, with browser layout checks at desktop and mobile widths; see [release checks](docs/RELEASE_CHECKS.md) for scope and limitations.
 
 Bug reports and feature requests are welcome in **English or Turkish**. Include the app version, operating system and reproduction steps. Never attach passwords, tokens, cookies, active QR codes or your private configuration. See [CONTRIBUTING.md](CONTRIBUTING.md) and [recent changes](docs/CHANGELOG.md).
 

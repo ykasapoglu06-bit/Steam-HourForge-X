@@ -7,7 +7,7 @@ it('opens all six views with three accounts and long names without missing contr
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const accounts=Array.from({length:3},(_,i)=>({name:'demo-'+i,label:'Uzun hesap etiketi '+i,displayName:'A long display name with Türkçe İ ı '+i,status:'farming',connectedSince:Date.now(),steamId:'7656119800000000'+i,mode:'hours',gamesPlaying:[620],library:[{appid:620,name:'Long game title '+i,playtimeMinutes:120}],priorityGames:[620],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[[620]],nextGames:[],manualGames:[],achievements:{}}));
- for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.9'})),setInterval:()=>0}))vi.stubGlobal(key,value);
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.10'})),setInterval:()=>0}))vi.stubGlobal(key,value);
  vi.resetModules();
  // @ts-expect-error browser module is plain JavaScript.
  await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
@@ -227,4 +227,29 @@ it.each(['paused','farming'])('reenables missing-achievement controls after Stea
  expect(calls).not.toContain('/api/achievement-complete');
  // A later disconnect must disable the same controls again.
  a.connectedSince=null;await intervals[0]();expect(complete().disabled).toBe(true);
+ a.samBusy=true;await intervals[0]();expect($('accountList').textContent).toContain('Başarım işlemi sürüyor');
+ a.samBusy=false;await intervals[0]();expect($('accountList').textContent).not.toContain('Başarım işlemi sürüyor');
+});
+
+it('ignores an earlier preview response after closing and opening another game',async()=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ const a={name:'demo',label:'Demo',status:'farming',connectedSince:123,mode:'hours',gamesPlaying:[],library:[{appid:620,name:'First game',playtimeMinutes:0},{appid:730,name:'Second game',playtimeMinutes:0}],priorityGames:[],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[],nextGames:[],manualGames:[],achievements:{}};
+ const pending=new Map<number,(r:Response)=>void>();
+ const fetchMock=vi.fn(async(path:string,options?:any)=>{
+  if(path==='/api/achievement-preview')return new Promise<Response>(resolve=>pending.set(JSON.parse(options.body).appid,resolve));
+  return new Response(JSON.stringify({accounts:[a]}));
+ });
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:()=>0}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('accountSelector').options.length).toBe(1));
+ dom.window.document.querySelector('[data-view="library"]').click();$('libraryDetails').open=true;$('libraryDetails').dispatchEvent(new dom.window.Event('toggle'));
+ $('libraryGames').querySelector('[data-complete-achievements="620"]').click();await vi.waitFor(()=>expect(pending.has(620)).toBe(true));$('cancelAchievement').click();
+ $('libraryGames').querySelector('[data-complete-achievements="730"]').click();await vi.waitFor(()=>expect(pending.has(730)).toBe(true));
+ const result=(appid:number,name:string)=>new Response(JSON.stringify({appid,steamId:'76561198000000000',nonce:'a'.repeat(48),expiresAt:Date.now()+120000,achievements:[{id:name,name,unlocked:false}]}));
+ pending.get(730)!(result(730,'Current preview'));await vi.waitFor(()=>expect($('samMissingList').textContent).toContain('Current preview'));
+ pending.get(620)!(result(620,'Stale preview'));await vi.waitFor(()=>expect(fetchMock.mock.settledResults.every(r=>r.type!=='incomplete')).toBe(true));await new Promise(resolve=>setTimeout(resolve,0));
+ expect($('samGame').textContent).toContain('Second game');expect($('samMissingList').textContent).toContain('Current preview');expect($('samMissingList').textContent).not.toContain('Stale preview');
 });

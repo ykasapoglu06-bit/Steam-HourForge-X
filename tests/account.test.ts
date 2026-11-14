@@ -322,3 +322,23 @@ describe("SteamAccount", () => {
     await account.stop();
   });
 });
+
+it('backs off after a steam-session rate-limit error as well as SteamUser errors',async()=>{
+ vi.useFakeTimers();
+ const config=ConfigSchema.parse({accounts:[{name:'limited',games:[620],loginMethod:'qr'}]});
+ const account=new SteamAccount(config.accounts[0]!,config.settings);
+ authenticateMock.mockRejectedValue(Object.assign(new Error('Rate limited'),{eresult:84}));
+ try{
+  await account.start();expect(account.getState()).toMatchObject({status:'rate_limited',authError:'AUTH_RATE_LIMIT'});
+  await expect(account.beginLogin('credentials',{accountName:'demo',password:'fixture'})).rejects.toThrow('AUTH_RATE_LIMIT');
+  await vi.advanceTimersByTimeAsync(600000);expect(authenticateMock).toHaveBeenCalledOnce();
+ }finally{await account.stop();vi.useRealTimers();vi.restoreAllMocks();}
+});
+
+it('also blocks Guard retries after Steam rate-limits a submitted code',async()=>{
+ const config=ConfigSchema.parse({accounts:[{name:'guard-limited',games:[620]}]});const account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+ internal.state.authPhase='guard';internal.guardSubmit=vi.fn().mockRejectedValue(Object.assign(new Error('Rate limited'),{eresult:84}));
+ await expect(account.submitGuardCode('ABCDE')).rejects.toThrow('AUTH_RATE_LIMIT');expect(account.getState().authError).toBe('AUTH_RATE_LIMIT');
+ await expect(account.submitGuardCode('FGHIJ')).rejects.toThrow('AUTH_RATE_LIMIT');expect(internal.guardSubmit).toHaveBeenCalledOnce();
+ await expect(account.beginLogin('credentials',{accountName:'demo',password:'fixture'})).rejects.toThrow('AUTH_RATE_LIMIT');
+});

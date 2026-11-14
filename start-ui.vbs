@@ -14,7 +14,7 @@ running = (request.status = 200)
 Err.Clear
 On Error GoTo 0
 If running Then
-  If InStr(request.responseText, Chr(34) & "version" & Chr(34) & ":" & Chr(34) & "2.4.9" & Chr(34)) = 0 Then
+  If InStr(request.responseText, Chr(34) & "version" & Chr(34) & ":" & Chr(34) & "2.4.10" & Chr(34)) = 0 Then
     MsgBox "Eski program surumu arka planda acik. Programi kapat dugmesiyle kapatip kisayolu tekrar acin. Hesaplariniz korunur." & vbCrLf & vbCrLf & "An older version is still running. Quit the app, then reopen this shortcut. Saved accounts are kept.", 48, "Steam HourForge X - Restart required"
     WScript.Quit 1
   End If

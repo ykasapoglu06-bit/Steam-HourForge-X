@@ -2,7 +2,7 @@ import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
-const APP_VERSION='2.4.9';
+const APP_VERSION='2.4.10';
 let versionMismatch=false;
 function showVersionError(){
   versionMismatch=true;
@@ -26,7 +26,7 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&
 let accounts=[],selectedName='',view='activity',filter='all',reachable=false,lastSuccess=0,profileResult=null,profileBusy=false,mutating=false,pollTask=null;
 let gameSignatures=new Map(),sidebarSignature='',accountSignature='',toastTimer,queueSignature='';
 const achievementBusy=new Set(),achievementErrors=new Map();
-let samPreview=null,samWriting=false;
+let samPreview=null,samWriting=false,samPreviewSequence=0;
 let quitting=false,appClosed=false,shutdownPollTimer=null;
 let loginMethod='credentials',loginPending=false,loginLocalError='',loginAccount='',loginLastPhase='';
 try { selectedName=localStorage.getItem('steam-hourforge-x.account')||''; } catch {}
@@ -114,7 +114,7 @@ function renderLogin(a){
 }
 
 function renderSidebar(){
-  const signature=JSON.stringify([language,selectedName,reachable,accounts.map(a=>[a.name,a.label,a.status,a.isPaused,a.gamesPlaying.length,a.avatarUrl,a.displayName])]);
+  const signature=JSON.stringify([language,selectedName,reachable,accounts.map(a=>[a.name,a.label,a.status,a.isPaused,a.samBusy,a.gamesPlaying.length,a.avatarUrl,a.displayName])]);
   if(signature===sidebarSignature)return;sidebarSignature=signature;
   $('accountList').innerHTML=accounts.map(a=>`<button class="account-item ${a.name===current()?.name?'selected':''}" data-account="${escape(a.name)}" aria-current="${a.name===current()?.name?'true':'false'}"><img class="rail-avatar" src="${escape(a.avatarUrl||'/avatar.svg')}" data-avatar alt=""><span><strong>${escape(a.label)}</strong><small>${escape(status(a))}</small></span><b>${activeSet(a).size}</b></button>`).join('');
   text('accountTotal',accounts.length);
@@ -380,24 +380,25 @@ $('shutdownApp').onclick=async()=>{
 
 async function previewCompletion(appid){
   const a=current();if(!a||samWriting)return;
+  const sequence=++samPreviewSequence;
   samPreview=null;const dialog=$('achievementDialog');
   text('samGame',(a.library.find(game=>game.appid===appid)?.name||appid)+' · '+appid);text('samAccount',a.label+' · '+a.steamId);
   text('samStatus',t('samPreviewLoading'));$('samMissingList').innerHTML='';show('samWarning',false);show('applyAchievements',false);$('applyAchievements').disabled=true;
   if(!dialog.open)dialog.showModal();
   try{
     const result=await request('/api/achievement-preview',{name:a.name,appid});
-    if(!dialog.open)return;
+    if(!dialog.open||sequence!==samPreviewSequence)return;
     samPreview={...result,name:a.name};
     const missing=result.achievements.filter(row=>!row.unlocked);
     text('samStatus',missing.length?t('samMissing',{count:missing.length}):t('samAllDone'));
     $('samMissingList').innerHTML=missing.map(row=>`<li><label class="achievement-choice"><input type="checkbox" name="samSelected" value="${escape(row.id)}" checked><span>${escape(row.name)} <small>${escape(row.id)}</small></span></label></li>`).join('');
     show('samWarning',Boolean(result.nonce));show('applyAchievements',Boolean(result.nonce));$('applyAchievements').disabled=!result.nonce;
     await poll();
-  }catch(error){text('samStatus',errorMessage(error));}
+  }catch(error){if(dialog.open&&sequence===samPreviewSequence)text('samStatus',errorMessage(error));}
 }
-function closeAchievement(){if(!samWriting){samPreview=null;$('achievementDialog').close();}}
+function closeAchievement(){if(!samWriting){samPreviewSequence++;samPreview=null;$('achievementDialog').close();}}
 $('closeAchievement').onclick=closeAchievement;$('cancelAchievement').onclick=closeAchievement;
-$('achievementDialog').addEventListener('cancel',event=>{if(samWriting)event.preventDefault();else samPreview=null;});
+$('achievementDialog').addEventListener('cancel',event=>{if(samWriting)event.preventDefault();else{samPreviewSequence++;samPreview=null;}});
 $('samMissingList').addEventListener('change',()=>{$('applyAchievements').disabled=samWriting||!$('samMissingList').querySelector('input:checked');});
 $('selectAllAchievements').onclick=()=>{$('samMissingList').querySelectorAll('input').forEach(input=>input.checked=true);$('samMissingList').dispatchEvent(new window.Event('change'));};
 $('clearAchievements').onclick=()=>{$('samMissingList').querySelectorAll('input').forEach(input=>input.checked=false);$('samMissingList').dispatchEvent(new window.Event('change'));};

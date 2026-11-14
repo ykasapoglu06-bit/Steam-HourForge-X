@@ -36,9 +36,11 @@ export class AccountManager {
     account = new SteamAccount(config, this.config.settings, claimCheck);
     return account;
   }
-  private save(): void {
-    writeFileSync(this.configPath + ".tmp", JSON.stringify(this.config, null, 2));
-    renameSync(this.configPath + ".tmp", this.configPath);
+  private save(config: AppConfig = this.config): void {
+    try {
+      writeFileSync(this.configPath + ".tmp", JSON.stringify(config, null, 2));
+      renameSync(this.configPath + ".tmp", this.configPath);
+    } catch { throw new Error('CONFIG_SAVE_FAILED'); }
   }
   async startAll(): Promise<void> {
     if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
@@ -64,9 +66,9 @@ export class AccountManager {
     if (this.accounts.some(account => account.getState().label.toLowerCase() === parsed.toLowerCase())) throw new Error("LABEL_EXISTS");
     const config = AccountSchema.parse({ name: "account-" + randomUUID().slice(0, 8), label: parsed, games: ["ALL"], loginMethod: "credentials", farmingMode: "hours" });
     const account = this.createAccount(config);
+    this.save({...this.config, accounts:[...this.config.accounts,config]});
     this.config.accounts.push(config);
     this.accounts.push(account);
-    this.save();
     void account.start().catch(() => log.warn({ account: config.name }, "Could not start account"));
     return config.name;
   }
@@ -85,8 +87,9 @@ export class AccountManager {
   updatePreferences(name: string, input: unknown): void {
     const preferences = AccountPreferencesSchema.parse(input);
     if (this.accounts.some(account => account.getState().name !== name && account.getState().label.toLowerCase() === preferences.label.toLowerCase())) throw new Error("LABEL_EXISTS");
-    this.find(name).setPreferences(preferences);
-    this.save();
+    this.find(name).setPreferences(preferences, next => {
+      this.save({...this.config, accounts:this.config.accounts.map(account=>account.name===name?next:account)});
+    });
   }
   async lookupProfile(name: string, profile: string) { return this.find(name).lookupProfile(profile); }
   async login(name:string,input:unknown){
@@ -108,7 +111,9 @@ export class AccountManager {
     }finally{this.pendingLogins.delete(name);this.lifecycleBusy.delete(name);}
   }
   async guard(name:string,code:unknown){if(typeof code!=='string'||! /^[a-zA-Z0-9]{5,8}$/.test(code))throw new Error('AUTH_GUARD_INVALID');await this.find(name).submitGuardCode(code);}
-  async addGame(name:string,appid:number){await this.find(name).addGame(appid);this.save();}
+  async addGame(name:string,appid:number){await this.find(name).addGame(appid,next=>{
+    this.save({...this.config,accounts:this.config.accounts.map(account=>account.name===name?next:account)});
+  });}
   async achievements(name:string,appid:number){
     const account=this.find(name);
     if(process.platform!=='win32')return account.achievementsFor(appid);
@@ -148,7 +153,9 @@ export class AccountManager {
         if(!['offline','error','skipped'].includes(account.getState().status))return;
         await account.stop();config.enabled = true; this.save();
         void account.start().catch(() => log.warn({ account: name }, "Could not start account")); break;
-      case "hours": case "cards": case "fixed": account.setMode(action); this.save(); break;
+      case "hours": case "cards": case "fixed":
+        this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,farmingMode:action}:item)});
+        account.setMode(action); break;
       default: throw new Error("INVALID_ACTION");
     }
     }finally{if(lifecycleAction)this.lifecycleBusy.delete(name);}
