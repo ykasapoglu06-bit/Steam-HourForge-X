@@ -26,7 +26,7 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
       res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
       res.end(assets.get(req.url!)); return;
     }
-    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.8", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
+    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.9", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
     if(closing&&req.method==='POST'&&req.url!=='/api/shutdown')return json(503,{error:'APP_SHUTTING_DOWN'});
     if (req.method === "POST" && ["/api/shutdown", "/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
       if (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "LOCAL_ONLY" });

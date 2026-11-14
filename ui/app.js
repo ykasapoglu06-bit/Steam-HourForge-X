@@ -2,7 +2,7 @@ import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
-const APP_VERSION='2.4.8';
+const APP_VERSION='2.4.9';
 let versionMismatch=false;
 function showVersionError(){
   versionMismatch=true;
@@ -135,7 +135,7 @@ function gameMarkup(game,a,fromProfile=false){
 }
 
 function renderGames(id,games,a,fromProfile=false,emptyKey='noGames'){
-  const signature=JSON.stringify([language,reachable,mutating,games,a.priorityGames,[...activeSet(a)],a.achievements,a.samBusy,[...achievementBusy],[...achievementErrors]]);
+  const signature=JSON.stringify([language,reachable,mutating,a.name,Boolean(a.connectedSince),fromProfile,emptyKey,games,a.priorityGames,a.manualGames,[...activeSet(a)],a.achievements,a.samBusy,[...achievementBusy],[...achievementErrors]]);
   if(gameSignatures.get(id)===signature)return;gameSignatures.set(id,signature);
   const focused=document.activeElement?.closest('[data-pin]')?.dataset.pin;
   const hadFocus=focused&&$(id).contains(document.activeElement);

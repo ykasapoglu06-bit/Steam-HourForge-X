@@ -7,7 +7,7 @@ it('opens all six views with three accounts and long names without missing contr
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const accounts=Array.from({length:3},(_,i)=>({name:'demo-'+i,label:'Uzun hesap etiketi '+i,displayName:'A long display name with Türkçe İ ı '+i,status:'farming',connectedSince:Date.now(),steamId:'7656119800000000'+i,mode:'hours',gamesPlaying:[620],library:[{appid:620,name:'Long game title '+i,playtimeMinutes:120}],priorityGames:[620],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[[620]],nextGames:[],manualGames:[],achievements:{}}));
- for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.8'})),setInterval:()=>0}))vi.stubGlobal(key,value);
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.9'})),setInterval:()=>0}))vi.stubGlobal(key,value);
  vi.resetModules();
  // @ts-expect-error browser module is plain JavaScript.
  await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
@@ -201,3 +201,30 @@ it("renders collapsed lists, priority selection, queue, achievements and sign-ou
   expect(dom.window.document.querySelector('[data-i18n="cardRewardNote"]')).toBeNull();
 });
 
+it.each(['paused','farming'])('reenables missing-achievement controls after Steam reconnects without reloading (%s)',async(status)=>{
+ dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
+ const a:any={name:'demo',label:'Demo',status,manualPaused:status==='paused',isPaused:status==='paused',connectedSince:123,mode:'hours',gamesPlaying:[],library:[{appid:620,name:'Demo game',playtimeMinutes:0}],priorityGames:[],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[],nextGames:[],manualGames:[],achievements:{},samBusy:false};
+ const intervals:Function[]=[];const calls:string[]=[];
+ const fetchMock=vi.fn(async(path:string,options?:any)=>{
+  calls.push(path);
+  if(options?.method){a.achievements[620]={unlocked:1,total:10,checkedAt:123};a.connectedSince=null;return new Response('{"ok":true}');}
+  return new Response(JSON.stringify({accounts:[a]}));
+ });
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:fetchMock,setInterval:(fn:Function)=>{intervals.push(fn);return 0;}}))vi.stubGlobal(key,value);
+ vi.resetModules();
+ // @ts-expect-error browser module is plain JavaScript.
+ await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);
+ await vi.waitFor(()=>expect($('accountSelector').options.length).toBe(1));
+ dom.window.document.querySelector('[data-view="library"]').click();$('libraryDetails').open=true;$('libraryDetails').dispatchEvent(new dom.window.Event('toggle'));
+ $('libraryGames').querySelector('[data-achievement="620"]').click();
+ await vi.waitFor(()=>expect($('libraryGames').textContent).toContain('1/10 başarım'));
+ const complete=()=>$('libraryGames').querySelector('[data-complete-achievements="620"]');
+ expect(complete().disabled).toBe(true);
+ a.connectedSince=456;await intervals[0]();
+ expect(complete().textContent).toContain('Eksik başarımları tamamla');expect(complete().disabled).toBe(false);
+ expect($('libraryGames').querySelector('[data-achievement="620"]').disabled).toBe(false);
+ expect(calls.filter(path=>path==='/api/achievements')).toHaveLength(1);
+ expect(calls).not.toContain('/api/achievement-complete');
+ // A later disconnect must disable the same controls again.
+ a.connectedSince=null;await intervals[0]();expect(complete().disabled).toBe(true);
+});

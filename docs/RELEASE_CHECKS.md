@@ -91,3 +91,14 @@ Quit app now attempts to close its own browser tab after the background server h
 
 Programı kapat, arka plan sunucusu durduktan sonra kendi tarayıcı sekmesini kapatmayı dener. Tarayıcı betikle kapatmayı engellerse elle kapatma açıklamalı kapandı ekranı kalır. Diğer sekmeler/pencereler hedeflenmez. 92 otomatik test ve Windows derlemesi başarılı; kapatma çağrısı ve engellenme durumundaki alternatif ekran taklitlerle kapsandı. Bu sohbette gerçek tarayıcı otomatik kapanması doğrulanmadı.
 
+
+## v2.4.9
+
+### English
+
+Achievement buttons now update when Steam reconnects after an achievement query. Missing-achievement completion becomes available automatically without a page reload, including for paused accounts. Disconnecting disables the controls again. Added regression coverage for both paused and running accounts; all 94 tests and the Windows build pass. Tests use mocked Steam responses and do not modify real achievements.
+
+### Türkçe
+
+Başarım sorgusundan sonra Steam yeniden bağlandığında başarım düğmeleri artık güncellenir. Eksik başarımları tamamlama, duraklatılmış hesaplarda da sayfayı yenilemeden kullanılabilir. Bağlantı kesilirse düğmeler tekrar devre dışı kalır. Duraklatılmış ve çalışan hesaplar için regresyon testleri eklendi; 94 test ve Windows derlemesi başarılı. Testler taklit Steam yanıtları kullanır; gerçek başarımları değiştirmez.
+
