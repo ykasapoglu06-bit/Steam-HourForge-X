@@ -2,7 +2,7 @@ import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
-const APP_VERSION='2.4.11';
+const APP_VERSION='2.4.12';
 let versionMismatch=false;
 function showVersionError(){
   versionMismatch=true;

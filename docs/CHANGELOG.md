@@ -1,7 +1,7 @@
 # Changelog / Değişiklikler
 
 
-## Unreleased / Sonraki sürüm
+## v2.4.12
 
 ### English
 

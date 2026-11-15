@@ -142,3 +142,13 @@ Başarım sorgusundan sonra Steam yeniden bağlandığında başarım düğmeler
 - Profil sorgusu başarısızsa mevcut lisans verisi kullanılır ve bilinen saatler korunur. Geçici açılış hatalarından sonra yeniden denenir; son eşitleme ve hata durumu iki dilde gösterilir.
 - Doğrulama: 109 test ve Windows TypeScript/yerel derlemesi başarılı. Yeni lisanslı oyun, eşzamanlı yenileme, sıra süresinin korunması, duraklatılmış hesapta periyodik kontrol, geciken sahiplik verisi ve oturum değişikliği için altı regresyon testi eklendi. Gerçek hesap doğrulanamadı: kontrol sırasında yerel panele erişilemedi.
 
+
+## v2.4.12
+
+### English
+
+The source release now includes the launcher fix already present on main: a running dashboard opens even when its runtime is older than the files on disk. The installed launcher was exercised with a running 2.4.10 backend; the dashboard window opened without the restart warning. Version 2.4.11 was subsequently activated and the real Steam library's 27 visible games were compared by name against the program: 27/27 present, with 38 total entries including extra free-license apps. These extra entries are retained at the user's request. The optional Windows tray feature has not been implemented; its combined source/build command was rejected by automatic approval review. It is not included in this release. 109 tests and the Windows build pass.
+
+### Türkçe
+
+Kaynak sürüm artık main dalındaki başlatıcı düzeltmesini de içerir: arka plandaki sürüm eski olsa bile mevcut panel açılır. Kurulu başlatıcı, çalışan 2.4.10 arka ucuyla denendi; yeniden başlatma uyarısı olmadan panel açıldı. Sonra 2.4.11 etkinleştirildi ve gerçek Steam kütüphanesindeki 27 oyun adlarıyla karşılaştırıldı: 27/27 mevcut; ek ücretsiz lisanslarla toplam 38 kayıt var. Bu ek kayıtlar kullanıcının isteğiyle korunur. İsteğe bağlı Windows sistem tepsisi özelliği uygulanmadı; kaynak oluşturma/derleme komutu otomatik onay denetimince engellendi. Bu sürüme dahil değildir. 109 test ve Windows derlemesi başarılı.
