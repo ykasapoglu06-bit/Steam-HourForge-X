@@ -1,6 +1,16 @@
 # Changelog / Değişiklikler
 
 
+## Unreleased / Sonraki sürüm
+
+### English
+
+The Windows launcher opens the existing dashboard when the application is already running, including an older runtime. It no longer blocks opening the panel with a restart-required dialog. It starts a new process only when the dashboard is unavailable.
+
+### Türkçe
+
+Windows başlatıcısı, eski sürüm de olsa arka planda çalışan uygulamanın panelini açar. Yeniden başlatma uyarısıyla panelin açılmasını engellemez. Yalnızca panel yanıt vermiyorsa yeni bir süreç başlatır.
+
 ## v2.4.11
 
 ### English
