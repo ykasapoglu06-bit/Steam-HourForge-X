@@ -96,6 +96,10 @@ export class SteamAccount extends EventEmitter {
   private logOnTimer: ReturnType<typeof setInterval> | null = null;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private allGames: number[] = [];
+  private ownershipReady = false;
+  private libraryRefreshTask: Promise<void> | null = null;
+  private libraryTimer: ReturnType<typeof setInterval> | null = null;
+  private lastLibraryAttempt = 0;
   private batchIndex = 0;
   private batchStartedAt = 0;
   private steamBlocked = false;
@@ -136,6 +140,7 @@ export class SteamAccount extends EventEmitter {
     this.client = new SteamUser({
       machineIdType: SteamUser.EMachineIDType.PersistentRandom,
       dataDirectory: `${settings.dataDirectory}/steam/${config.name}`,
+      enablePicsCache: true,
       renewRefreshTokens: true,
       autoRelogin: true,
     });
@@ -227,32 +232,44 @@ export class SteamAccount extends EventEmitter {
     this.refreshGames();
   }
 
+  private licensedGames(): {appid:number;name:string}[] {
+    if(!this.ownershipReady)return [];
+    try{return this.client.getOwnedApps().flatMap(appid=>{
+      const common=this.client.picsCache.apps[appid]?.appinfo?.common;
+      if(!Number.isSafeInteger(appid)||appid<1||appid>2147483647||!['game','application','demo','mod'].includes(String(common?.type).toLowerCase()))return [];
+      return [{appid,name:typeof common?.name==='string'&&common.name.trim()?common.name:`App ${appid}`}];
+    });}catch{return [];}
+  }
+
   async refreshLibrary(): Promise<void> {
     if (!this.state.steamId || this.stopped) throw new Error("ACCOUNT_OFFLINE");
-    if (this.state.libraryRefreshing) return;
+    if(this.libraryRefreshTask)return this.libraryRefreshTask;
     const generation=this.sessionGeneration;
-    this.state.libraryRefreshing = true;
-    this.state.libraryError = null;
+    this.state.libraryRefreshing=true;this.state.libraryError=null;this.lastLibraryAttempt=Date.now();
+    const task=this.loadLibrary(generation).finally(()=>{
+      if(this.libraryRefreshTask===task){this.libraryRefreshTask=null;this.state.libraryRefreshing=false;}
+    });
+    this.libraryRefreshTask=task;return task;
+  }
+
+  private async loadLibrary(generation:number):Promise<void>{
     try {
-      const library = await this.client.getUserOwnedApps(this.state.steamId, { includePlayedFreeGames: true, includeFreeSub: true, skipUnvettedApps: false } as SteamUser.GetUserOwnedAppsOptions);
-      if (this.stopped || generation!==this.sessionGeneration) return;
-      const configured = this.config.games.filter((game): game is number => typeof game === "number");
-      this.allGames = [...new Set([...configured, ...library.apps.map(app => app.appid).sort((a, b) => a - b),...this.config.manualGames.map(game=>game.appid)])].filter(id => id > 0);
-      const names: Record<number, string> = { 730: "Counter-Strike 2", 271590: "Grand Theft Auto V Legacy", 1174180: "Red Dead Redemption 2", 218: "Source SDK Base 2007" };
-      this.state.library = this.allGames.map(appid => {
-        const game = library.apps.find(app => app.appid === appid);
-        return { appid, name: names[appid] ?? game?.name ?? this.config.manualGames.find(game=>game.appid===appid)?.name ?? `App ${appid}`, playtimeMinutes: game?.playtime_forever ?? 0 };
-      });
-      this.state.priorityGames = this.config.priorityGames.filter(id => this.allGames.includes(id));
-      this.state.libraryCheckedAt = Date.now();
-      this.batchIndex = 0;
-      this.batchStartedAt = Date.now();
-      this.refreshGames();
-      this.log.info({ totalGames: this.allGames.length }, "Library refreshed");
-    } catch (err) {
-      this.state.libraryError = "LIBRARY_UNAVAILABLE";
-      throw err;
-    } finally { this.state.libraryRefreshing = false; }
+      let apps:SteamUser.UserOwnedApps['apps']=[],profileFailed=false;
+      try{apps=(await this.client.getUserOwnedApps(this.state.steamId!, { includePlayedFreeGames: true, includeFreeSub: true, skipUnvettedApps: false } as SteamUser.GetUserOwnedAppsOptions)).apps;}
+      catch(error){profileFailed=true;if(!this.licensedGames().length)throw error;}
+      if(this.stopped||generation!==this.sessionGeneration)return;
+      const licensed=this.licensedGames(),previous=new Map(this.state.library.map(game=>[game.appid,game]));
+      const configured=this.config.games.filter((game):game is number=>typeof game==='number');
+      this.allGames=[...new Set([...configured,...[...apps.map(game=>game.appid),...licensed.map(game=>game.appid)].sort((a,b)=>a-b),...this.config.manualGames.map(game=>game.appid)])].filter(id=>id>0);
+      const info=new Map(apps.map(game=>[game.appid,game])),licenseNames=new Map(licensed.map(game=>[game.appid,game.name]));
+      const names:Record<number,string>={730:'Counter-Strike 2',271590:'Grand Theft Auto V Legacy',1174180:'Red Dead Redemption 2',218:'Source SDK Base 2007'};
+      this.state.library=this.allGames.map(appid=>({appid,name:names[appid]||info.get(appid)?.name||licenseNames.get(appid)||this.config.manualGames.find(game=>game.appid===appid)?.name||previous.get(appid)?.name||`App ${appid}`,playtimeMinutes:info.get(appid)?.playtime_forever??previous.get(appid)?.playtimeMinutes??0}));
+      this.state.priorityGames=this.config.priorityGames.filter(id=>this.allGames.includes(id));
+      this.state.libraryCheckedAt=Date.now();this.state.libraryError=profileFailed?'LIBRARY_PLAYTIME_UNAVAILABLE':null;
+      if(!this.batchStartedAt)this.batchStartedAt=Date.now();
+      // Refreshing metadata must not restart the playtime rotation clock.
+      this.refreshGames();this.log.info({totalGames:this.allGames.length},'Library refreshed');
+    }catch(error){if(!this.stopped&&generation===this.sessionGeneration)this.state.libraryError='LIBRARY_UNAVAILABLE';throw error;}
   }
 
   async addGame(appid:number,persist?:(next:AccountConfig)=>void):Promise<void> {
@@ -419,6 +436,9 @@ export class SteamAccount extends EventEmitter {
     if (this.wasSkipped || this.stopped) { this.started = false; return; }
     this.logOnTimer = setInterval(() => this.logOn(), this.settings.logOnIntervalMs);
     this.refreshTimer = setInterval(() => this.refreshGames(), this.settings.refreshGamesIntervalMs);
+    this.libraryTimer = setInterval(() => {
+      if(!this.stopped&&!this.state.samBusy&&this.state.connectedSince&&Date.now()-this.lastLibraryAttempt>=5*60_000)void this.refreshLibrary().catch(()=>{});
+    },5*60_000);
   }
 
   async shutdown():Promise<void>{
@@ -428,6 +448,7 @@ export class SteamAccount extends EventEmitter {
 
   async stop(options:{preservePause?:boolean}={}): Promise<void> {
     this.sessionGeneration++;
+    this.ownershipReady=false;this.libraryRefreshTask=null;this.state.libraryRefreshing=false;
     this.stopped = true;
     this.started = false;
     this.state.enabled = false;
@@ -442,6 +463,8 @@ export class SteamAccount extends EventEmitter {
     this.reconnectTimer=null;
     if (this.logOnTimer) clearInterval(this.logOnTimer);
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if(this.libraryTimer)clearInterval(this.libraryTimer);
+    this.libraryTimer=null;
     this.logOnTimer = null;
     this.refreshTimer = null;
     this.webCookies = [];
@@ -552,6 +575,14 @@ export class SteamAccount extends EventEmitter {
   }
 
   private bindEvents(): void {
+    this.client.on('ownershipCached',()=>{
+      this.ownershipReady=true;
+      const generation=this.sessionGeneration;
+      void (async()=>{
+        if(this.libraryRefreshTask)await this.libraryRefreshTask.catch(()=>{});
+        if(!this.stopped&&generation===this.sessionGeneration&&!this.state.samBusy&&this.state.steamId)await this.refreshLibrary();
+      })().catch(()=>{});
+    });
     this.client.on("accountInfo", (name: string) => {
       if (!name) return;
       this.state.displayName=name.slice(0,128);
@@ -580,11 +611,8 @@ export class SteamAccount extends EventEmitter {
         this.updateState({ status: "online", steamId, gamesPlaying: [] });
         try {
           await this.refreshLibrary();
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.log.error({ err: message }, "Could not load game library; restart to retry");
-          this.updateState({ status: "error", lastError: message });
-          return;
+        } catch {
+          this.log.warn("Library unavailable; automatic synchronization will retry");
         }
       }
       if (this.stopped) return;

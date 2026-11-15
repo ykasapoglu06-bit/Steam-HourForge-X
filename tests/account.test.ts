@@ -342,3 +342,53 @@ it('also blocks Guard retries after Steam rate-limits a submitted code',async()=
  await expect(account.submitGuardCode('FGHIJ')).rejects.toThrow('AUTH_RATE_LIMIT');expect(internal.guardSubmit).toHaveBeenCalledOnce();
  await expect(account.beginLogin('credentials',{accountName:'demo',password:'fixture'})).rejects.toThrow('AUTH_RATE_LIMIT');
 });
+
+describe('library synchronization',()=>{
+ function fixture(){
+  const config=ConfigSchema.parse({accounts:[{name:'new-games',games:['ALL']}],settings:{refreshGamesIntervalMs:1000}}),account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+  Object.assign(internal.state,{steamId:'76561198000000000',connectedSince:new Date(),status:'paused',isPaused:true,manualPaused:true});
+  vi.spyOn(internal.client,'gamesPlayed').mockImplementation(()=>{});return {account,internal,config};
+ }
+ it('merges newly licensed unplayed games and software, excluding DLC and tools',async()=>{
+  const {account,internal}=fixture();
+  vi.spyOn(internal.client,'getUserOwnedApps').mockResolvedValue({apps:[{appid:620,name:'Portal 2',playtime_forever:123}]});
+  vi.spyOn(internal.client,'getOwnedApps').mockReturnValue([620,900001,900002,900003,900004]);
+  internal.client.picsCache.apps={900001:{appinfo:{common:{name:'Brand new free game',type:'Game'}}},900002:{appinfo:{common:{name:'DLC',type:'DLC'}}},900003:{appinfo:{common:{name:'Dedicated server',type:'Tool'}}},900004:{appinfo:{common:{name:'New software',type:'Application'}}}};
+  internal.client.emit('ownershipCached');
+  await vi.waitFor(()=>expect(account.getState().library.some(g=>g.appid===900001)).toBe(true));
+  expect(account.getState().library.map(g=>g.appid)).toEqual([620,900001,900004]);
+  expect(account.getState().library.find(g=>g.appid===900001)).toMatchObject({name:'Brand new free game',playtimeMinutes:0});expect(account.getState().manualPaused).toBe(true);
+ });
+ it('shares an in-flight refresh and does not reset rotation on refresh',async()=>{
+  const {account,internal}=fixture();let finish!:(r:any)=>void;
+  const read=vi.spyOn(internal.client,'getUserOwnedApps').mockImplementation(()=>new Promise(resolve=>finish=resolve));
+  internal.batchIndex=2;internal.batchStartedAt=Date.now()-60000;const began=internal.batchStartedAt;
+  const first=account.refreshLibrary(),second=account.refreshLibrary();let secondDone=false;void second.then(()=>secondDone=true);
+  await Promise.resolve();expect(secondDone).toBe(false);expect(read).toHaveBeenCalledOnce();finish({apps:[{appid:620,name:'Demo',playtime_forever:0}]});await Promise.all([first,second]);
+  expect(internal.batchIndex).toBe(2);expect(internal.batchStartedAt).toBe(began);
+ });
+ it('periodically checks for additions even while farming is paused',async()=>{
+  vi.useFakeTimers();const {account,internal}=fixture();vi.spyOn(internal,'logOn').mockResolvedValue();
+  const read=vi.spyOn(internal.client,'getUserOwnedApps').mockResolvedValueOnce({apps:[{appid:620,name:'First',playtime_forever:0}]}).mockResolvedValue({apps:[{appid:620,name:'First',playtime_forever:0},{appid:900001,name:'New game',playtime_forever:0}]});
+  try{await account.start();await account.refreshLibrary();await vi.advanceTimersByTimeAsync(300000);expect(read).toHaveBeenCalledTimes(2);expect(account.getState().library.map(g=>g.appid)).toContain(900001);}finally{await account.stop();vi.useRealTimers();vi.restoreAllMocks();}
+ });
+ it('recovers from an initial library failure when license data arrives later',async()=>{
+  const {account,internal}=fixture();internal.client.steamID={getSteamID64:()=> '76561198000000000'};vi.spyOn(internal.client,'setPersona').mockImplementation(()=>{});
+  vi.spyOn(internal.client,'getUserOwnedApps').mockRejectedValue(new Error('Unavailable'));vi.spyOn(internal.client,'getOwnedApps').mockReturnValue([900001]);
+  internal.client.emit('loggedOn');await vi.waitFor(()=>expect(account.getState().connectedSince).not.toBeNull());
+  internal.client.picsCache.apps={900001:{appinfo:{common:{name:'Recovered game',type:'Game'}}}};internal.client.emit('ownershipCached');
+  await vi.waitFor(()=>expect(account.getState().library.map(g=>g.appid)).toEqual([900001]));expect(account.getState().status).toBe('paused');expect(account.getState().manualPaused).toBe(true);
+ });
+ it('does not overwrite a new session with an older refresh result',async()=>{
+  const {account,internal}=fixture();let finish!:(r:any)=>void;
+  const read=vi.spyOn(internal.client,'getUserOwnedApps').mockImplementationOnce(()=>new Promise(resolve=>finish=resolve)).mockResolvedValue({apps:[{appid:730,name:'Current session game',playtime_forever:1}]});
+  vi.spyOn(internal.client,'logOff').mockImplementation(()=>{});const old=account.refreshLibrary();await account.stop();
+  internal.stopped=false;Object.assign(internal.state,{steamId:'76561198000000001',connectedSince:new Date(),status:'paused'});await account.refreshLibrary();finish({apps:[{appid:620,name:'Old session game',playtime_forever:1}]});await old;
+  expect(read).toHaveBeenCalledTimes(2);expect(account.getState().library.map(g=>g.appid)).toEqual([730]);expect(account.getState().libraryRefreshing).toBe(false);
+ });
+ it('keeps licensed games usable if the profile library endpoint is unavailable',async()=>{
+  const {account,internal}=fixture();vi.spyOn(internal.client,'getUserOwnedApps').mockRejectedValue(new Error('Profile unavailable'));vi.spyOn(internal.client,'getOwnedApps').mockReturnValue([900001]);
+  internal.client.picsCache.apps={900001:{appinfo:{common:{name:'Licensed game',type:'Game'}}}};
+  internal.client.emit('ownershipCached');await vi.waitFor(()=>expect(account.getState().library.map(g=>g.appid)).toEqual([900001]));
+ });
+});

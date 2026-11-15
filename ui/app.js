@@ -2,7 +2,7 @@ import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
-const APP_VERSION='2.4.10';
+const APP_VERSION='2.4.11';
 let versionMismatch=false;
 function showVersionError(){
   versionMismatch=true;
@@ -225,6 +225,7 @@ function render(){
   $('cardQueue').innerHTML=a.cardQueue.slice(0,5).map(g=>`<li><span>${escape(g.name)}</span><b>${g.remaining}</b></li>`).join('');
   $('refreshCards').disabled=mutating||!reachable||a.cardStatus==='checking'||!a.connectedSince;
   $('refreshLibrary').disabled=$('scanAll').disabled=mutating||!reachable||a.libraryRefreshing||!a.connectedSince;
+  text('libraryStatus',a.libraryRefreshing?t('scanning'):a.libraryError?errorMessage(new Error(a.libraryError)):a.libraryCheckedAt?t('librarySynced',{count:a.library.length,time:time(a.libraryCheckedAt)}):t('librarySyncHelp'));
   text('refreshLibrary',t(a.libraryRefreshing?'scanning':'refreshLibrary'));text('scanAll',t(a.libraryRefreshing?'scanning':'ownLibrary'));
   $('profileForm').querySelector('button').disabled=profileBusy||!reachable||!a.connectedSince;
   $('profileLink').href=a.steamId?`https://steamcommunity.com/profiles/${a.steamId}/`:'https://steamcommunity.com/my/';

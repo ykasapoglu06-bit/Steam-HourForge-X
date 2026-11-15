@@ -1,6 +1,24 @@
 # Changelog / Değişiklikler
 
 
+## v2.4.11
+
+### English
+
+- Automatically synchronize the library when Steam ownership data changes and recheck every five minutes, including while paused.
+- Merge the profile library with current Steam licenses so newly acquired, unplayed games and software can appear before the profile endpoint lists them. DLC and server/tool entries are excluded from these automatic additions; explicitly configured/manual entries are retained.
+- Preserve the rotation position and timer during library refresh. Concurrent refresh callers wait for the same work; stale results from a previous session cannot replace the current list.
+- If the profile endpoint fails, use available license data and preserve known playtime. Retry synchronization after transient startup errors; show sync time and library errors in both languages.
+- Validation: 109 tests and Windows TypeScript/native build pass. Six new regressions cover newly licensed unplayed games, concurrent refresh, rotation preservation, periodic sync while paused, delayed ownership data and session changes. The real user account was not verified: the local dashboard was unreachable during this check.
+
+### Türkçe
+
+- Steam sahiplik bilgisi değişince kütüphane otomatik eşitlenir; duraklatılmış hesaplarda da beş dakikada bir kontrol edilir.
+- Profil kütüphanesi Steam lisanslarıyla birleştirilir. Yeni edinilmiş, hiç oynanmamış oyunlar ve yazılımlar profil listesi güncellenmeden de bulunabilir. Bu otomatik eklemelerde DLC ve sunucu/araç kayıtları ayıklanır; yapılandırılmış veya elle eklenmiş kayıtlar korunur.
+- Kütüphane yenilenirken oyun sırası ve süresi sıfırlanmaz. Aynı anda yapılan yenilemeler aynı işlemi bekler; eski oturum yanıtları yeni listeyi değiştirmez.
+- Profil sorgusu başarısızsa mevcut lisans verisi kullanılır ve bilinen saatler korunur. Geçici açılış hatalarından sonra yeniden denenir; son eşitleme ve hata durumu iki dilde gösterilir.
+- Doğrulama: 109 test ve Windows TypeScript/yerel derlemesi başarılı. Yeni lisanslı oyun, eşzamanlı yenileme, sıra süresinin korunması, duraklatılmış hesapta periyodik kontrol, geciken sahiplik verisi ve oturum değişikliği için altı regresyon testi eklendi. Gerçek hesap doğrulanamadı: kontrol sırasında yerel panele erişilemedi.
+
 ## v2.4.10
 
 ### English
