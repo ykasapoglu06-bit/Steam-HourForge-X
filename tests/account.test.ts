@@ -176,9 +176,9 @@ describe("SteamAccount", () => {
     client.emit("loggedOn");await new Promise(resolve=>setImmediate(resolve));
     expect(account.getState().gamesPlaying).toHaveLength(32);
     expect(account.getState().gamesPlaying.slice(0,2)).toEqual([730,271590]);
-    expect(account.getState().nextGames).toEqual([730,271590,31,32,33,34,35]);
+    expect(account.getState().nextGames).toEqual([730,271590,31,32,33,34,35,...Array.from({length:25},(_,i)=>i+1)]);
     account.nextBatch();
-    expect(account.getState().gamesPlaying).toEqual([730,271590,31,32,33,34,35]);
+    expect(account.getState().gamesPlaying).toEqual([730,271590,31,32,33,34,35,...Array.from({length:25},(_,i)=>i+1)]);
     expect(()=>account.setPreferences({label:'Main',priorityGames:[999999],rotationMinutes:30})).toThrow('PRIORITY_NOT_OWNED');
   });
   it("shows a QR image and cancels a pending login when disconnected",async()=>{
@@ -391,4 +391,16 @@ describe('library synchronization',()=>{
   internal.client.picsCache.apps={900001:{appinfo:{common:{name:'Licensed game',type:'Game'}}}};
   internal.client.emit('ownershipCached');await vi.waitFor(()=>expect(account.getState().library.map(g=>g.appid)).toEqual([900001]));
  });
+});
+
+it('keeps 32 reported games when the rotation timer reaches the final partial group',()=>{
+ vi.useFakeTimers();try{
+  const config=ConfigSchema.parse({accounts:[{name:'full-groups',games:['ALL'],rotationMinutes:15}]}),account=new SteamAccount(config.accounts[0]!,config.settings),internal=account as any;
+  internal.allGames=Array.from({length:35},(_,i)=>i+1);internal.batchStartedAt=Date.now();Object.assign(internal.state,{status:'farming',connectedSince:new Date(),isPaused:false});
+  const report=vi.spyOn(internal.client,'gamesPlayed').mockImplementation(()=>{});
+  internal.refreshGames();expect(report.mock.calls.at(-1)![0]).toHaveLength(32);
+  vi.setSystemTime(Date.now()+15*60000);internal.refreshGames();
+  expect(account.getState().gamesPlaying).toHaveLength(32);expect(account.getState().gamesPlaying).toEqual([33,34,35,...Array.from({length:29},(_,i)=>i+1)]);
+  expect(report.mock.calls.at(-1)![0]).toHaveLength(32);expect(account.getState().queue.every(group=>group.length===32)).toBe(true);expect(account.getState().nextGames).toHaveLength(32);
+ }finally{vi.useRealTimers();vi.restoreAllMocks();}
 });

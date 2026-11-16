@@ -83,7 +83,7 @@ Son hesabı da kaldırıp daha sonra yeni bir hesap ekleyebilirsin. Yerel başar
 
 ## Saat ve kart sıraları
 
-**Önce saat**, en fazla 32 oyunluk gruplar oluşturur. Öncelikli oyunlar her grupta bir yer kaplar; diğer oyunlar kalan yerlerde döner. 32 yeri de sabitlersen diğer oyunlara yer kalmaz. Hesap ayarlarında grup süresini **5–240 dakika** arasında belirleyebilirsin.
+**Önce saat**, en fazla 32 oyunluk gruplar oluşturur. Öncelikli oyunlar her grupta bir yer kaplar; diğer oyunlar kalan yerlerde döner. Son grup eksik kalırsa önceki oyunlardan tamamlanır; kütüphanede en az 32 oyun olduğunda her grupta 32 farklı oyun bulunur. Daha küçük kütüphanelerde mevcut oyunların tamamı kullanılır. 32 yeri de sabitlersen diğer oyunlara yer kalmaz. Hesap ayarlarında grup süresini **5–240 dakika** arasında belirleyebilirsin.
 
 **Önce kart**, kart hakkı bulunan tek bir oyunu çalıştırır; saat önceliklerini geçici olarak bekletir. Rozet sayfaları beş dakikada bir kontrol edilir. Panelde mevcut oyun, kalan hak ve sıradaki oyun gösterilir. Haklar bitince saat sırası önceliklerinle devam eder. Rozet sayacındaki azalma bir gözlemdir; uygunluğu ve kartın düşme zamanını Steam belirler.
 
@@ -141,7 +141,7 @@ Uygulamada analitik yoktur. Steam bağlantıları, görsel istekleri ve harici p
 
 ## Geliştirme ve katkı
 
-Arka uç TypeScript, arayüz sade JavaScript/CSS kullanır. Windows ve Linux derlemeleri [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml) üzerinde çalışır. v2.4.12 kontrollerinde **109 test** geçti; masaüstü ve mobil tarayıcı düzeni kontrolleri v2.4.10 için kaydedildi; kapsam ve sınırlamalar [sürüm kontrollerinde](docs/RELEASE_CHECKS.md) yer alır.
+Arka uç TypeScript, arayüz sade JavaScript/CSS kullanır. Windows ve Linux derlemeleri [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml) üzerinde çalışır. v2.4.13 kontrollerinde **120 test** geçti; masaüstü ve mobil tarayıcı düzeni kontrolleri v2.4.10 için kaydedildi; kapsam ve sınırlamalar [sürüm kontrollerinde](docs/RELEASE_CHECKS.md) yer alır.
 
 Hata ve özellik önerilerini **Türkçe veya İngilizce** yazabilirsin. Uygulama sürümünü, işletim sistemini ve tekrar etme adımlarını ekle. Şifre, giriş anahtarı, çerez, aktif QR kodu veya kişisel yapılandırmanı ekleme. [CONTRIBUTING.md](CONTRIBUTING.md) ve [son değişikliklere](docs/CHANGELOG.md) bakabilirsin.
 

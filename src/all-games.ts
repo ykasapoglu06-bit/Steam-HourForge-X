@@ -5,7 +5,9 @@ export function gameBatch(games: number[], batch: number, priorities: number[] =
   const slots = 32 - pins.length;
   if (!slots || !rest.length) return pins;
   const start = (batch % Math.ceil(rest.length / slots)) * slots;
-  return [...pins, ...rest.slice(start, start + slots)];
+  // Wrap the final partial group so available playtime slots stay occupied.
+  const rotating = Array.from({length: Math.min(slots, rest.length)}, (_, index) => rest[(start + index) % rest.length]!);
+  return [...pins, ...rotating];
 }
 
 export function batchCount(games: number[], priorities: number[] = []): number {

@@ -7,7 +7,7 @@ it('opens all six views with three accounts and long names without missing contr
  dom=new JSDOM(readFileSync(new URL('../ui/index.html',import.meta.url),'utf8'),{url:'http://127.0.0.1:17321'});dom.window.scrollTo=()=>{};
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const accounts=Array.from({length:3},(_,i)=>({name:'demo-'+i,label:'Uzun hesap etiketi '+i,displayName:'A long display name with Türkçe İ ı '+i,status:'farming',connectedSince:Date.now(),steamId:'7656119800000000'+i,mode:'hours',gamesPlaying:[620],library:[{appid:620,name:'Long game title '+i,playtimeMinutes:120}],priorityGames:[620],rotationMinutes:30,cardQueue:[],cardStatus:'waiting',queue:[[620]],nextGames:[],manualGames:[],achievements:{}}));
- for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.12'})),setInterval:()=>0}))vi.stubGlobal(key,value);
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,fetch:async()=>new Response(JSON.stringify({accounts,version:'2.4.13'})),setInterval:()=>0}))vi.stubGlobal(key,value);
  vi.resetModules();
  // @ts-expect-error browser module is plain JavaScript.
  await import('../ui/app.js');const $=(id:string)=>dom.window.document.getElementById(id);

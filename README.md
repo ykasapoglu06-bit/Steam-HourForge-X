@@ -83,7 +83,7 @@ You can remove the last entry and add a new one later. Conflicting account actio
 
 ## Playtime and card queues
 
-**Hours first** builds groups of up to 32 games. Priority games occupy a slot in every group; other titles rotate through the remaining slots. If you pin all 32 slots, other games have no room. Set the group duration from **5 to 240 minutes** in account settings.
+**Hours first** builds groups of up to 32 games. Priority games occupy a slot in every group; other titles rotate through the remaining slots. A partial final group wraps to earlier games to keep 32 distinct games active whenever the library has at least 32. Smaller libraries use all available games. If you pin all 32 slots, other games have no room. Set the group duration from **5 to 240 minutes** in account settings.
 
 **Cards first** runs one game with remaining eligible drops, temporarily putting the hours priorities on hold. Badge pages are checked every five minutes. The dashboard shows the current eligible game, remaining rights and the next game. Once rights run out, the hours queue resumes with your priorities. A badge-counter decrease is an observation; drop eligibility and timing are decided by Steam.
 
@@ -141,7 +141,7 @@ The app has no analytics. Steam connections, artwork requests and external profi
 
 ## Development and contributions
 
-The backend uses TypeScript and the interface uses plain JavaScript/CSS. Windows and Linux builds run in [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml). The v2.4.12 checks passed **109 tests**, with desktop/mobile layout checks recorded for v2.4.10; see [release checks](docs/RELEASE_CHECKS.md) for scope and limitations.
+The backend uses TypeScript and the interface uses plain JavaScript/CSS. Windows and Linux builds run in [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml). The v2.4.13 checks passed **120 tests**, with desktop/mobile layout checks recorded for v2.4.10; see [release checks](docs/RELEASE_CHECKS.md) for scope and limitations.
 
 Bug reports and feature requests are welcome in **English or Turkish**. Include the app version, operating system and reproduction steps. Never attach passwords, tokens, cookies, active QR codes or your private configuration. See [CONTRIBUTING.md](CONTRIBUTING.md) and [recent changes](docs/CHANGELOG.md).
 

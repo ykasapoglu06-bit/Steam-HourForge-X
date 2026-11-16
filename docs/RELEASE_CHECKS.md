@@ -152,3 +152,13 @@ The source release now includes the launcher fix already present on main: a runn
 ### Türkçe
 
 Kaynak sürüm artık main dalındaki başlatıcı düzeltmesini de içerir: arka plandaki sürüm eski olsa bile mevcut panel açılır. Kurulu başlatıcı, çalışan 2.4.10 arka ucuyla denendi; yeniden başlatma uyarısı olmadan panel açıldı. Sonra 2.4.11 etkinleştirildi ve gerçek Steam kütüphanesindeki 27 oyun adlarıyla karşılaştırıldı: 27/27 mevcut; ek ücretsiz lisanslarla toplam 38 kayıt var. Bu ek kayıtlar kullanıcının isteğiyle korunur. İsteğe bağlı Windows sistem tepsisi özelliği uygulanmadı; kaynak oluşturma/derleme komutu otomatik onay denetimince engellendi. Bu sürüme dahil değildir. 109 test ve Windows derlemesi başarılı.
+
+## v2.4.13
+
+### English
+
+Hours groups wrap around to earlier games to fill the final partial group with up to 32 distinct games. With 35 games, the second group now contains the last three plus 29 earlier games. Priorities stay pinned, every non-priority game is still covered, and the queue/next-game preview uses the same full groups. Libraries with fewer than 32 games use all available distinct games. Selected-only mode and the single-game card queue retain their existing behavior. 120 tests and the Windows build pass, including timed rotation and varied library sizes.
+
+### Türkçe
+
+Saat grupları, eksik kalan son grubu en fazla 32 farklı oyuna tamamlamak için listenin başına döner. 35 oyunda ikinci grup, son üç oyunla önceki 29 oyundan oluşur. Öncelikler her grupta kalır, diğer oyunların tamamı sıraya girer ve tam sıra/sıradaki oyun görünümü aynı dolu grupları kullanır. 32'den az oyun varsa mevcut farklı oyunların tamamı kullanılır. Yalnızca seçtiklerim modu ve tek oyunlu kart sırası korunur. Zamanlı geçiş ve farklı kütüphane boyutları dahil 120 test ve Windows derlemesi başarılı.

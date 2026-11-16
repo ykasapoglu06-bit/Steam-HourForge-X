@@ -4,7 +4,7 @@ import { gameBatch, batchCount } from "../src/all-games.js";
 it("rotates every owned game without exceeding 32 concurrent games", () => {
   const games = Array.from({ length: 35 }, (_, i) => i + 1);
   expect(gameBatch(games, 0)).toEqual(games.slice(0, 32));
-  expect(gameBatch(games, 1)).toEqual([33, 34, 35]);
+  expect(gameBatch(games, 1)).toEqual([33, 34, 35, ...games.slice(0,29)]);
   expect(gameBatch(games, 2)).toEqual(games.slice(0, 32));
   expect(gameBatch([], 0)).toEqual([]);
 });
@@ -13,7 +13,7 @@ it("keeps pinned games active in every batch and rotates all remaining games", (
   const games = Array.from({ length: 65 }, (_, i) => i + 1);
   expect(gameBatch(games, 0, [1, 64])).toEqual([1, 64, ...Array.from({ length: 30 }, (_, i) => i + 2)]);
   expect(gameBatch(games, 1, [1, 64])).toEqual([1, 64, ...Array.from({ length: 30 }, (_, i) => i + 32)]);
-  expect(gameBatch(games, 2, [1, 64])).toEqual([1, 64, 62, 63, 65]);
+  expect(gameBatch(games, 2, [1, 64])).toEqual([1, 64, 62, 63, 65, ...Array.from({length:27},(_,i)=>i+2)]);
   expect(batchCount(games, [1, 64])).toBe(3);
   expect(gameBatch(games, 3, [1, 64])).toEqual(gameBatch(games, 0, [1, 64]));
 });
@@ -24,4 +24,18 @@ it("deduplicates pinned games, ignores unavailable IDs and never exceeds 32", ()
   expect(gameBatch(games, 0, [1, 1, 999]).filter(id => id === 1)).toHaveLength(1);
   expect(gameBatch(games, 0, games.slice(0, 32))).toEqual(games.slice(0, 32));
   expect(batchCount(games, games.slice(0, 32))).toBe(1);
+});
+
+it.each([0,1,4,31,32,33,35,38,65,204])('fills every rotating group for a library of %s games',size=>{
+ const games=Array.from({length:size},(_,i)=>i+1);
+ for(const pins of [[],games.slice(0,3)]){
+  const seen=new Set<number>();
+  for(let batch=0;batch<Math.max(1,batchCount(games,pins));batch++){
+   const group=gameBatch(games,batch,pins);
+   expect(group).toHaveLength(Math.min(32,size));expect(new Set(group).size).toBe(group.length);
+   for(const id of pins)expect(group).toContain(id);
+   for(const id of group){expect(games).toContain(id);seen.add(id);}
+  }
+  expect([...seen].sort((a,b)=>a-b)).toEqual(games);
+ }
 });
