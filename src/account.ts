@@ -1,4 +1,5 @@
 import SteamUser from "steam-user";
+import {readRuntime,saveRuntime} from "./runtime-state.js";
 import { readProfile, saveProfile, clearProfile, safeAvatar, safeVanity } from './profile-cache.js';
 import { gameBatch, batchCount } from "./all-games.js";
 import QRCode from "qrcode";
@@ -71,6 +72,13 @@ export interface AccountState {
   authPhase: 'idle'|'credentials'|'qr'|'guard'|'steam';
   authChallenge: AuthChallenge|null;
   authError: string|null;
+  eligibleGameCount:number;
+  completedGoalIds:number[];
+  eligiblePriorityCount:number;
+  eligibleCardQueue:CardGame[];
+  hourGoals:Record<string,number>;
+  events:{at:number;kind:string;detail:string}[];
+  runtimeError:string|null;
   cardSessionDrops:number;
   cardStartedAt:number|null;
 }
@@ -102,6 +110,9 @@ export class SteamAccount extends EventEmitter {
   private lastLibraryAttempt = 0;
   private batchIndex = 0;
   private batchStartedAt = 0;
+  private suspendedAt:number|null=null;
+  private savedRemainingMs:number|null=null;
+  private checkpointTimer:ReturnType<typeof setInterval>|null=null;
   private steamBlocked = false;
   private webCookies: string[] = [];
   private scanningCards = false;
@@ -119,6 +130,7 @@ export class SteamAccount extends EventEmitter {
   private samFinishedAt=0;
   private lastCardCounts=new Map<number,number>();
   private currentCardAppid:number|null=null;
+  private completedGoals=new Set<number>();
   private achievementsPending = new Map<number,Promise<unknown>>();
 
   private static readonly MAX_BACKOFF_MS = 600_000;
@@ -164,7 +176,8 @@ export class SteamAccount extends EventEmitter {
       lastError: null,
       connectedSince: null,
       mode: config.farmingMode,
-      manualPaused: false,
+      manualPaused: config.manualPaused,
+      hourGoals:{...config.hourGoals},eligibleGameCount:0,completedGoalIds:[],eligiblePriorityCount:0,eligibleCardQueue:[],events:[],runtimeError:null,
       library: [],
       cardStatus: "waiting",
       cardQueue: [],
@@ -179,6 +192,9 @@ export class SteamAccount extends EventEmitter {
       cardSessionDrops:0,cardStartedAt:null,
     };
 
+    const savedRuntime=readRuntime(settings.dataDirectory,config.name);
+    if(savedRuntime){this.batchIndex=savedRuntime.group;this.savedRemainingMs=Math.min(savedRuntime.remainingMs,this.state.rotationMinutes*60000);this.state.events=savedRuntime.events;}
+    this.state.isPaused=this.state.manualPaused;
     Object.assign(this.state,readProfile(settings.dataDirectory,config.name));
     this.client.on('vanityURL',(value:string)=>{this.state.vanityUrl=safeVanity(value);this.cacheProfile();});
     this.bindEvents();
@@ -188,10 +204,13 @@ export class SteamAccount extends EventEmitter {
     return this.state;
   }
 
-  async beginLogin(method:'credentials'|'qr',credentials?:{accountName:string;password:string}):Promise<void>{
+  assertCanLogin(){
     if(this.state.samBusy)throw new Error('REQUEST_BUSY');
     if(Date.now()<this.rateLimitedUntil)throw new Error('AUTH_RATE_LIMIT');
     if(this.state.connectedSince&&['farming','paused','online'].includes(this.state.status))throw new Error('ACCOUNT_ALREADY_CONNECTED');
+  }
+  async beginLogin(method:'credentials'|'qr',credentials?:{accountName:string;password:string}):Promise<void>{
+    this.assertCanLogin();
     await this.stop();
     clearSavedToken(this.config.name,this.settings.dataDirectory);
     this.config.password=undefined;this.config.sharedSecret=undefined;this.config.loginMethod=method;
@@ -201,6 +220,7 @@ export class SteamAccount extends EventEmitter {
     this.state.avatarUrl=null;this.state.displayName=null;this.state.vanityUrl=null;
     this.state.library=[];this.state.achievements={};this.state.gamesPlaying=[];
     this.state.queue=[];this.state.nextGames=[];this.state.cardQueue=[];this.allGames=[];
+    this.batchIndex=0;this.batchStartedAt=0;this.savedRemainingMs=null;this.suspendedAt=Date.now();this.completedGoals.clear();
     this.lastCardCounts.clear();this.state.cardSessionDrops=0;this.state.cardStartedAt=null;this.currentCardAppid=null;
     clearProfile(this.settings.dataDirectory,this.config.name);
     void this.start().catch(()=>{this.state.authError='AUTH_UNAVAILABLE';});
@@ -221,15 +241,15 @@ export class SteamAccount extends EventEmitter {
   setPreferences(preferences: { priorityGames: number[]; rotationMinutes: number; label: string }, persist?: (next: AccountConfig) => void): void {
     const priorities = [...new Set(preferences.priorityGames)];
     if (priorities.some(id => !this.state.library.some(game => game.appid === id))) throw new Error("PRIORITY_NOT_OWNED");
+    const reset=JSON.stringify(priorities)!==JSON.stringify(this.config.priorityGames)||preferences.rotationMinutes!==this.config.rotationMinutes;
     const changes = { ...preferences, priorityGames: priorities };
     persist?.({...this.config, ...changes});
     Object.assign(this.config, changes);
     this.state.priorityGames = priorities;
     this.state.rotationMinutes = preferences.rotationMinutes;
     this.state.label = preferences.label;
-    this.batchIndex = 0;
-    this.batchStartedAt = Date.now();
-    this.refreshGames();
+    if(reset){this.batchIndex=0;this.batchStartedAt=Date.now();this.suspendedAt=this.state.isPaused?Date.now():null;this.savedRemainingMs=null;}
+    this.refreshGames();this.checkpoint();
   }
 
   private licensedGames(): {appid:number;name:string}[] {
@@ -266,9 +286,9 @@ export class SteamAccount extends EventEmitter {
       this.state.library=this.allGames.map(appid=>({appid,name:names[appid]||info.get(appid)?.name||licenseNames.get(appid)||this.config.manualGames.find(game=>game.appid===appid)?.name||previous.get(appid)?.name||`App ${appid}`,playtimeMinutes:info.get(appid)?.playtime_forever??previous.get(appid)?.playtimeMinutes??0}));
       this.state.priorityGames=this.config.priorityGames.filter(id=>this.allGames.includes(id));
       this.state.libraryCheckedAt=Date.now();this.state.libraryError=profileFailed?'LIBRARY_PLAYTIME_UNAVAILABLE':null;
-      if(!this.batchStartedAt)this.batchStartedAt=Date.now();
+      if(!this.batchStartedAt){this.batchStartedAt=Date.now()-(this.state.rotationMinutes*60000-(this.savedRemainingMs??this.state.rotationMinutes*60000));this.suspendedAt=Date.now();this.savedRemainingMs=null;}
       // Refreshing metadata must not restart the playtime rotation clock.
-      this.refreshGames();this.log.info({totalGames:this.allGames.length},'Library refreshed');
+      this.record('library',String(this.allGames.length));this.refreshGames();this.log.info({totalGames:this.allGames.length},'Library refreshed');
     }catch(error){if(!this.stopped&&generation===this.sessionGeneration)this.state.libraryError='LIBRARY_UNAVAILABLE';throw error;}
   }
 
@@ -367,9 +387,26 @@ export class SteamAccount extends EventEmitter {
     this.refreshGames();
   }
 
+  private freezeClock(){if(this.suspendedAt===null)this.suspendedAt=Date.now();}
+  private thawClock(){if(this.suspendedAt!==null){if(this.batchStartedAt)this.batchStartedAt+=Date.now()-this.suspendedAt;this.suspendedAt=null;}}
+  private record(kind:string,detail=''){this.state.events.unshift({at:Date.now(),kind,detail:detail.slice(0,200)});this.state.events=this.state.events.slice(0,100);}
+  checkpoint(){
+    const end=this.suspendedAt??Date.now();
+    const remaining=this.batchStartedAt?Math.max(0,this.state.rotationMinutes*60000-(end-this.batchStartedAt)):(this.savedRemainingMs??this.state.rotationMinutes*60000);
+    try{saveRuntime(this.settings.dataDirectory,this.config.name,{group:Math.max(0,this.batchIndex),remainingMs:Math.min(remaining,this.state.rotationMinutes*60000),manualPaused:this.state.manualPaused,events:this.state.events});this.state.runtimeError=null;}
+    catch{this.state.runtimeError='CONFIG_SAVE_FAILED';}
+  }
+  setGoal(appid:number,minutes:number|null,persist?:(next:AccountConfig)=>void){
+    if(!this.state.library.some(game=>game.appid===appid))throw new Error('PRIORITY_NOT_OWNED');
+    if(minutes!==null&&(!Number.isSafeInteger(minutes)||minutes<1||minutes>60000000))throw new Error('INVALID_SETTINGS');
+    const goals={...this.config.hourGoals};if(minutes===null)delete goals[String(appid)];else goals[String(appid)]=minutes;
+    persist?.({...this.config,hourGoals:goals});this.config.hourGoals=goals;this.state.hourGoals={...goals};this.record('goal',String(appid));this.refreshGames();this.checkpoint();
+  }
   pause(): void {
+    this.freezeClock();this.config.manualPaused=true;
     this.state.manualPaused = true;
     this.state.isPaused = true;
+    this.record('paused');this.checkpoint();
     if (this.state.connectedSince && ["farming", "paused", "online"].includes(this.state.status)) {
       this.client.gamesPlayed([]);
       this.updateState({ status: "paused" });
@@ -377,8 +414,10 @@ export class SteamAccount extends EventEmitter {
   }
 
   resume(): void {
+    this.config.manualPaused=false;if(!this.steamBlocked)this.thawClock();
     this.state.manualPaused = false;
     this.state.isPaused = this.steamBlocked;
+    this.record('resumed');this.checkpoint();
     if (this.state.status === "paused" && !this.steamBlocked) {
       this.updateState({ status: "farming" });
       this.refreshGames();
@@ -387,10 +426,10 @@ export class SteamAccount extends EventEmitter {
 
   nextBatch(): void {
     if(this.state.mode==='fixed')throw new Error('FIXED_MODE_NO_ROTATION');
-    if (this.state.mode !== "hours"&&this.state.cardQueue.length) throw new Error("Kartlar bitene kadar mevcut oyun açık kalır.");
+    if (this.state.mode !== "hours"&&this.state.eligibleCardQueue.length) throw new Error("Kartlar bitene kadar mevcut oyun açık kalır.");
     this.batchIndex++;
-    this.batchStartedAt = Date.now();
-    this.refreshGames();
+    this.batchStartedAt = Date.now();if(this.suspendedAt!==null)this.suspendedAt=Date.now();
+    this.record('group',String(this.batchIndex));this.refreshGames();this.checkpoint();
   }
 
   async checkCards(): Promise<void> {
@@ -408,6 +447,7 @@ export class SteamAccount extends EventEmitter {
       this.state.cardStatus = "ready";
       this.state.cardCheckedAt = Date.now();
       this.state.cardError = null;
+      this.record('cards',String(queue.reduce((sum,g)=>sum+g.remaining,0)));
       this.log.info({ games: this.state.cardQueue.length, remaining: this.state.cardQueue.reduce((n, game) => n + game.remaining, 0) }, "Card drop queue refreshed");
       this.refreshGames();
     } catch (err) {
@@ -434,6 +474,7 @@ export class SteamAccount extends EventEmitter {
     this.lastSentGames=[];
     await this.logOn();
     if (this.wasSkipped || this.stopped) { this.started = false; return; }
+    this.checkpointTimer=setInterval(()=>this.checkpoint(),30000);
     this.logOnTimer = setInterval(() => this.logOn(), this.settings.logOnIntervalMs);
     this.refreshTimer = setInterval(() => this.refreshGames(), this.settings.refreshGamesIntervalMs);
     this.libraryTimer = setInterval(() => {
@@ -443,10 +484,12 @@ export class SteamAccount extends EventEmitter {
 
   async shutdown():Promise<void>{
     this.shuttingDown=true;
-    await this.stop();
+    this.checkpoint();await this.stop({preservePause:true});
   }
 
   async stop(options:{preservePause?:boolean}={}): Promise<void> {
+    this.freezeClock();this.checkpoint();
+    if(this.checkpointTimer)clearInterval(this.checkpointTimer);this.checkpointTimer=null;
     this.sessionGeneration++;
     this.ownershipReady=false;this.libraryRefreshTask=null;this.state.libraryRefreshing=false;
     this.stopped = true;
@@ -468,7 +511,7 @@ export class SteamAccount extends EventEmitter {
     this.logOnTimer = null;
     this.refreshTimer = null;
     this.webCookies = [];
-    if(!options.preservePause)this.state.manualPaused=false;
+    if(!options.preservePause)this.state.manualPaused=this.config.manualPaused;
     this.state.isPaused=this.state.manualPaused;this.steamBlocked=false;
     if (this.state.status === "offline" || this.state.status === "skipped") { this.updateState({ status: "offline", connectedSince: null }); return; }
 
@@ -696,29 +739,39 @@ export class SteamAccount extends EventEmitter {
   }
 
   private refreshGames(): void {
+    const completed=new Set(this.state.library.filter(game=>this.config.hourGoals[String(game.appid)]&&game.playtimeMinutes>=this.config.hourGoals[String(game.appid)]!).map(game=>game.appid));
+    for(const id of completed)if(!this.completedGoals.has(id))this.record('goalReached',String(id));this.completedGoals=completed;
+    const scope=this.config.games.includes('ALL')?this.allGames:[...new Set([...this.config.games.filter((id):id is number=>typeof id==='number'),...this.config.manualGames.map(game=>game.appid)])];
+    const eligible=scope.filter(id=>!this.config.hourGoals[String(id)]||(this.state.library.find(game=>game.appid===id)?.playtimeMinutes??0)<this.config.hourGoals[String(id)]!);
+    const priorities=this.state.priorityGames.filter(id=>eligible.includes(id));
+    const cards=this.state.cardQueue.filter(game=>eligible.includes(game.appid));
+    this.state.eligibleGameCount=eligible.length;this.state.completedGoalIds=[...completed];this.state.eligiblePriorityCount=priorities.length;
+    this.state.eligibleCardQueue=cards;
     const fixed=this.state.mode==='fixed';
-    const count = fixed?(this.state.priorityGames.length?1:0):batchCount(this.allGames, this.state.priorityGames);
+    const count = fixed?(priorities.length?1:0):batchCount(eligible, priorities);
     const rotationMs = this.state.rotationMinutes * 60_000;
-    const cardActive = this.state.mode === "cards" && this.state.cardQueue.length > 0;
+    const cardActive = this.state.mode === "cards" && cards.length > 0;
     const canReport = this.state.status === "farming" && Boolean(this.state.connectedSince) && !this.stopped && !this.state.isPaused && !this.state.samBusy;
+    if(canReport&&!cardActive){this.thawClock();}else this.freezeClock();
     if (canReport && this.webCookies.length && Date.now() - this.lastCardAttempt >= 5 * 60_000) void this.checkCards();
     if (canReport && !cardActive && count > 1 && Date.now() - this.batchStartedAt >= rotationMs) {
-      this.batchIndex++;
+      this.batchIndex++;this.record('group',String(this.batchIndex));
       this.batchStartedAt = Date.now();
       this.log.info({ games: this.state.gamesPlaying }, "Switched to next game batch");
     }
-    if(fixed)this.state.gamesPlaying=[...this.state.priorityGames];
-    else if (this.allGames.length) this.state.gamesPlaying = gameBatch(this.allGames, this.batchIndex, this.state.priorityGames);
-    if (this.state.mode === "cards" && this.state.cardQueue.length) {
-      this.state.gamesPlaying = [this.state.cardQueue[0]!.appid];
+    if(fixed)this.state.gamesPlaying=[...priorities];
+    else if (eligible.length) this.state.gamesPlaying = gameBatch(eligible, this.batchIndex, priorities);
+    if (this.state.mode === "cards" && cards.length) {
+      this.state.gamesPlaying = [cards[0]!.appid];
     }
-    const currentCard=cardActive?this.state.cardQueue[0]!.appid:null;
+    const currentCard=cardActive?cards[0]!.appid:null;
     if(currentCard!==this.currentCardAppid){this.currentCardAppid=currentCard;this.state.cardStartedAt=currentCard?Date.now():null;}
     this.state.batchCount = count;
     this.state.batchIndex = this.state.batchCount ? this.batchIndex % this.state.batchCount : 0;
-    this.state.nextBatchAt = !cardActive && count > 1 ? this.batchStartedAt + rotationMs : null;
-    this.state.queue = fixed ? (this.state.priorityGames.length?[[...this.state.priorityGames]]:[]) : cardActive ? this.state.cardQueue.map(game=>[game.appid]) : Array.from({length:count},(_,index)=>gameBatch(this.allGames,this.batchIndex+index,this.state.priorityGames));
+    this.state.nextBatchAt = !cardActive && count > 1 ? (this.suspendedAt===null?this.batchStartedAt+rotationMs:Date.now()+Math.max(0,rotationMs-(this.suspendedAt-this.batchStartedAt))) : null;
+    this.state.queue = fixed ? (priorities.length?[[...priorities]]:[]) : cardActive ? cards.map(game=>[game.appid]) : Array.from({length:count},(_,index)=>gameBatch(eligible,this.batchIndex+index,priorities));
     this.state.nextGames = this.state.queue.length>1 ? this.state.queue[1]! : [];
+    if(!eligible.length&&!fixed)this.state.gamesPlaying=[];
     if (!canReport) return;
     if(this.state.lastReportedAt && Date.now()-this.state.lastReportedAt<30_000 && JSON.stringify(this.lastSentGames)===JSON.stringify(this.state.gamesPlaying))return;
     this.client.gamesPlayed(this.state.gamesPlaying);
@@ -757,6 +810,7 @@ export class SteamAccount extends EventEmitter {
   private updateState(partial: Partial<AccountState>): void {
     const isStatusUnchanged = partial.status !== undefined && partial.status === this.state.status;
     const isErrorUnchanged = partial.lastError !== undefined && partial.lastError === this.state.lastError;
+    if(partial.status&&partial.status!==this.state.status){this.record('status',partial.status);if(partial.status!=='farming')this.freezeClock();}
     Object.assign(this.state, partial);
     if (isStatusUnchanged && isErrorUnchanged) return;
     this.emit("stateChange", this.state);

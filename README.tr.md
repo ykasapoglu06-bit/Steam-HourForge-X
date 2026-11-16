@@ -89,6 +89,14 @@ Son hesabı da kaldırıp daha sonra yeni bir hesap ekleyebilirsin. Yerel başar
 
 Bildirim durumu, uygulamanın Steam'e oynama durumunu gönderdiğini gösterir; kazanılan saatleri bağımsız olarak doğrulamaz. Kayıtlı oynama süresini güncellemek için kütüphaneyi yenile. App ID eklemek Steam'deki oyun adını kontrol eder; sahiplik veya saat kazanımı sağlamaz.
 
+## Kaldığı yerden devam, sağlık ve ayar yedekleri
+
+Elle duraklatma tercihi ve aktif grup ilerlemesi yerel olarak saklanır. Duraklatma, bağlantı kopması ve kart çalışması boyunca grup saati bekler. Düzgün kapanışta o anki durum kaydedilir; ani çıkışta son kayıttan itibaren en fazla 30 saniye kaybolabilir. Uygulama kapalıyken geçen süre rotasyona sayılmaz. Yalnızca etiket değiştirmek sırayı sıfırlamaz.
+
+**Hesaplar → Sağlık ve geçmiş** ekranında durum ve son olaylar bulunur. **Ayarları yedekle**, taşınabilir JSON indirir. Yedek seçildiğinde değişecek kayıtları gözden geçirip onaylayabilirsin. Önce bu hesapların bağlantısını kes. Eşleşen kayıtlar güncellenir, yeniler bağlantısız eklenir; diğer kayıtlar kalır. Yedekler şifre, giriş adı, oturum anahtarı, çerez ve geçmiş içermez. Başka bilgisayarda yeniden giriş gerekir. Grup ilerlemesi yerel durum kaydında kalır; taşınabilir ayar yedeğine dahil değildir. Yedek JSON şifreli değildir; hesap etiketlerini ve yerel kayıt kimliklerini içerir. Özel olarak sakla.
+
+Sahip olunan oyun kartındaki **Saat hedefi belirle** ile toplam Steam saatini seç. Kütüphane yenilenmesi hedefi doğrulayınca oyun tüm çalışma sıralarından çıkar, görünür kalır. Hedefi kaldırınca tekrar sıraya girebilir. Mevcut saatler hedefe dahildir; ek saat hedefi değildir. Steam saat bilgisini gecikmeli güncelleyebilir. Otomatik hedef atanmaz.
+
 ## Windows'ta başarım işlemleri
 
 1. Steam masaüstü istemcisini panelde seçili hesapla **aynı hesapta** çevrimiçi tut. Diğer oturumlarda çalışan oyunları durdur.
@@ -121,6 +129,7 @@ Hesap kartında giriş yapılan profil ve kullanılabilir kimlik bilgileri göst
 | --- | --- |
 | `config.json` | Hesap kayıtları ve ayarlar; elle yapılandırılmışsa şifre içerebilir. |
 | `data/tokens/` | Kayıtlı Steam giriş anahtarları. |
+| `data/runtime/` | Yerel grup ilerlemesi ve son olaylar. |
 | `data/steam/` | Hesap başına Steam istemci önbelleği. |
 | `data/achievement-actions.jsonl` | Başarım tamamlama denemeleri. |
 | `data/steam-hourforge-x.log` | Masaüstü başlatıcısının çıktısı. |
@@ -141,7 +150,7 @@ Uygulamada analitik yoktur. Steam bağlantıları, görsel istekleri ve harici p
 
 ## Geliştirme ve katkı
 
-Arka uç TypeScript, arayüz sade JavaScript/CSS kullanır. Windows ve Linux derlemeleri [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml) üzerinde çalışır. v2.4.13 kontrollerinde **120 test** geçti; masaüstü ve mobil tarayıcı düzeni kontrolleri v2.4.10 için kaydedildi; kapsam ve sınırlamalar [sürüm kontrollerinde](docs/RELEASE_CHECKS.md) yer alır.
+Arka uç TypeScript, arayüz sade JavaScript/CSS kullanır. Windows ve Linux derlemeleri [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml) üzerinde çalışır. v2.5.0 kontrollerinde **137 test** geçti; masaüstü ve mobil tarayıcı düzeni kontrolleri v2.4.10 için kaydedildi; kapsam ve sınırlamalar [sürüm kontrollerinde](docs/RELEASE_CHECKS.md) yer alır.
 
 Hata ve özellik önerilerini **Türkçe veya İngilizce** yazabilirsin. Uygulama sürümünü, işletim sistemini ve tekrar etme adımlarını ekle. Şifre, giriş anahtarı, çerez, aktif QR kodu veya kişisel yapılandırmanı ekleme. [CONTRIBUTING.md](CONTRIBUTING.md) ve [son değişikliklere](docs/CHANGELOG.md) bakabilirsin.
 

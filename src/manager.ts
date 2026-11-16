@@ -1,5 +1,6 @@
 import { SteamAccount, type AccountState, type ClaimConflictCheck } from "./account.js";
 import { AccountSchema, AccountPreferencesSchema, type AppConfig, type AccountConfig } from "./config.js";
+import {exportSettings,parseBackup} from "./backup.js";
 import { log } from "./logger.js";
 import { writeFileSync, renameSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -12,6 +13,7 @@ export class AccountManager {
   private lifecycleBusy=new Set<string>();
   private pendingLogins=new Map<string,string>();
   private shuttingDown=false;
+  private restoring=false;
   constructor(private config: AppConfig, private configPath = "config.json") {
     this.sam=new SamService(runSam,Date.now,entry=>{
       mkdirSync(config.settings.dataDirectory,{recursive:true});
@@ -44,6 +46,7 @@ export class AccountManager {
   }
   async startAll(): Promise<void> {
     if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
+    if(this.restoring)throw new Error('REQUEST_BUSY');
     await Promise.all(this.accounts.filter(account => this.config.accounts.find(config => config.name === account.getState().name)?.enabled).map(account => account.start()));
   }
   async stopAll(): Promise<void> {
@@ -54,6 +57,7 @@ export class AccountManager {
   getStates(): Readonly<AccountState>[] { return this.accounts.map(account => account.getState()); }
   private find(name: string): SteamAccount {
     if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
+    if(this.restoring)throw new Error('REQUEST_BUSY');
     if(this.lifecycleBusy.has(name))throw new Error('REQUEST_BUSY');
     const account = this.accounts.find(item => item.getState().name === name);
     if (!account) throw new Error("ACCOUNT_NOT_FOUND");
@@ -61,6 +65,7 @@ export class AccountManager {
   }
   addAccount(label: string): string {
     if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
+    if(this.restoring)throw new Error('REQUEST_BUSY');
     const parsed = AccountPreferencesSchema.shape.label.parse(label);
     if (this.accounts.length >= 20) throw new Error("ACCOUNT_LIMIT");
     if (this.accounts.some(account => account.getState().label.toLowerCase() === parsed.toLowerCase())) throw new Error("LABEL_EXISTS");
@@ -76,12 +81,14 @@ export class AccountManager {
     const account=this.find(name);
     if(account.getState().samBusy)throw new Error('REQUEST_BUSY');
     this.lifecycleBusy.add(name);
+    const before=structuredClone(this.config.accounts.find(item=>item.name===name)!);
     try{
-      await account.logout();this.sam.invalidate(name);
       const next={...this.config,accounts:this.config.accounts.filter(item=>item.name!==name)};
-      writeFileSync(this.configPath+'.tmp',JSON.stringify(next,null,2));renameSync(this.configPath+'.tmp',this.configPath);
+      this.save(next);await account.logout();this.sam.invalidate(name);
+
       this.config.accounts=next.accounts;
       this.accounts=this.accounts.filter(item=>item!==account);account.removeAllListeners();
+    }catch(error){const config=this.config.accounts.find(item=>item.name===name);if(config){for(const key of Object.keys(config))delete (config as any)[key];Object.assign(config,before);try{this.save();}catch{throw new Error('CONFIG_SAVE_FAILED');}}throw error;
     }finally{this.lifecycleBusy.delete(name);}
   }
   updatePreferences(name: string, input: unknown): void {
@@ -102,18 +109,45 @@ export class AccountManager {
       if(this.config.accounts.some(item=>item.name!==name&&item.accountName?.toLowerCase()===normalized)||[...this.pendingLogins].some(([other,user])=>other!==name&&user===normalized))throw new Error('ACCOUNT_LOGIN_EXISTS');
       this.pendingLogins.set(name,normalized);
     }
+    try{account.assertCanLogin();}catch(error){this.pendingLogins.delete(name);throw error;}
     this.lifecycleBusy.add(name);
+    const before=structuredClone(this.config.accounts.find(item=>item.name===name)!);
     try{
+      this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,enabled:true,loginMethod:data.method as 'credentials'|'qr',accountName:data.method==='credentials'?(data.accountName as string).trim():item.accountName,password:undefined,sharedSecret:undefined}:item)});
       if(data.method==='credentials')await account.beginLogin('credentials',{accountName:(data.accountName as string).trim(),password:data.password as string});
       else await account.beginLogin('qr');
       this.config.accounts.find(item=>item.name===name)!.enabled=true;
-      this.save();
+    }catch(error){const config=this.config.accounts.find(item=>item.name===name)!;for(const key of Object.keys(config))delete (config as any)[key];Object.assign(config,before);try{this.save();}catch{throw new Error('CONFIG_SAVE_FAILED');}throw error;
     }finally{this.pendingLogins.delete(name);this.lifecycleBusy.delete(name);}
   }
   async guard(name:string,code:unknown){if(typeof code!=='string'||! /^[a-zA-Z0-9]{5,8}$/.test(code))throw new Error('AUTH_GUARD_INVALID');await this.find(name).submitGuardCode(code);}
   async addGame(name:string,appid:number){await this.find(name).addGame(appid,next=>{
     this.save({...this.config,accounts:this.config.accounts.map(account=>account.name===name?next:account)});
   });}
+  backup(){return exportSettings(this.config.accounts);}
+  previewBackup(input:unknown){
+    const backup=parseBackup(input);const combined=new Set([...this.config.accounts.map(a=>a.name),...backup.accounts.map(a=>a.name)]);if(combined.size>20)throw new Error('ACCOUNT_LIMIT');
+    return {accounts:backup.accounts.map(item=>({name:item.name,label:item.label||item.name,exists:this.config.accounts.some(a=>a.name===item.name),games:item.games.length,priorities:item.priorityGames.length,mode:item.farmingMode})),count:backup.accounts.length};
+  }
+  async restoreBackup(input:unknown,confirmed:boolean){
+    if(!confirmed)throw new Error('BACKUP_CONFIRM_REQUIRED');if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
+    if(this.restoring)throw new Error('REQUEST_BUSY');
+    const backup=parseBackup(input);this.previewBackup(backup);
+    const targets=new Set(backup.accounts.map(a=>a.name));
+    if(this.lifecycleBusy.size||this.pendingLogins.size||this.accounts.some(a=>targets.has(a.getState().name)&&!['offline','error','skipped'].includes(a.getState().status)))throw new Error('BACKUP_DISCONNECT_REQUIRED');
+    const accounts=this.config.accounts.map(item=>{const entry=backup.accounts.find(a=>a.name===item.name);return entry?AccountSchema.parse({...item,...entry}):item;});
+    for(const entry of backup.accounts)if(!accounts.some(a=>a.name===entry.name))accounts.push(AccountSchema.parse({...entry,enabled:false,loginMethod:'credentials'}));
+    const next={...this.config,accounts};
+    this.restoring=true;
+    try{
+      this.save(next);
+      for(const old of this.accounts.filter(a=>targets.has(a.getState().name))){await old.stop({preservePause:true});old.removeAllListeners();}
+      this.config.accounts=accounts;
+      this.accounts=accounts.map(item=>targets.has(item.name)?this.createAccount(item):this.accounts.find(a=>a.getState().name===item.name)!);
+    }catch(error){try{this.save(this.config);}catch{throw new Error('CONFIG_SAVE_FAILED');}throw error;}
+    finally{this.restoring=false;}
+  }
+  setGoal(name:string,appid:number,minutes:number|null){this.find(name).setGoal(appid,minutes,next=>this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?next:item)}));}
   async achievements(name:string,appid:number){
     const account=this.find(name);
     if(process.platform!=='win32')return account.achievementsFor(appid);
@@ -127,14 +161,18 @@ export class AccountManager {
   async completeAchievements(name:string,appid:number,nonce:string,confirmed:boolean,ids?:string[]){return this.find(name).desktopAchievements(appid,steamId=>this.sam.complete(name,steamId,appid,nonce,confirmed,ids));}
   async control(name: string, action: string): Promise<void> {
     if(this.shuttingDown)throw new Error('APP_SHUTTING_DOWN');
+    if(this.restoring)throw new Error('REQUEST_BUSY');
     if (name === "*") {
       if (!["pause", "resume"].includes(action)) throw new Error("INVALID_ACTION");
-      for (const account of this.accounts) action === "pause" ? account.pause() : account.resume();
+      const paused=action==='pause';
+      this.save({...this.config,accounts:this.config.accounts.map(item=>({...item,manualPaused:paused}))});
+      for (const account of this.accounts) paused ? account.pause() : account.resume();
       return;
     }
     const account = this.find(name);
     const config = this.config.accounts.find(item => item.name === name)!;
     const lifecycleAction=['stop','logout','start'].includes(action);
+    const before=lifecycleAction?structuredClone(config):null;
     if(lifecycleAction){
       if(account.getState().samBusy)throw new Error('REQUEST_BUSY');
       this.sam.invalidate(name);
@@ -142,22 +180,26 @@ export class AccountManager {
     }
     try{
     switch (action) {
-      case "pause": account.pause(); break;
-      case "resume": account.resume(); break;
+      case "pause": this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,manualPaused:true}:item)});account.pause(); break;
+      case "resume": this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,manualPaused:false}:item)});account.resume(); break;
       case "next": account.nextBatch(); break;
       case "refreshCards": await account.checkCards(); break;
       case "refreshLibrary": await account.refreshLibrary(); break;
-      case "stop": config.enabled = false; await account.stop(); this.save(); break;
-      case "logout": config.enabled = false; await account.logout(); this.save(); break;
+      case "stop": this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,enabled:false}:item)});config.enabled=false;await account.stop({preservePause:true});break;
+      case "logout": this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,enabled:false,password:undefined,sharedSecret:undefined,accountName:undefined,loginMethod:'credentials' as const}:item)});config.enabled=false;await account.logout();break;
       case "start":
         if(!['offline','error','skipped'].includes(account.getState().status))return;
-        await account.stop();config.enabled = true; this.save();
+        this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,enabled:true}:item)});
+        await account.stop({preservePause:true});config.enabled = true;
         void account.start().catch(() => log.warn({ account: name }, "Could not start account")); break;
       case "hours": case "cards": case "fixed":
         this.save({...this.config,accounts:this.config.accounts.map(item=>item.name===name?{...item,farmingMode:action}:item)});
         account.setMode(action); break;
       default: throw new Error("INVALID_ACTION");
     }
+    }catch(error){
+      if(before){for(const key of Object.keys(config))delete (config as any)[key];Object.assign(config,before);try{this.save();}catch{throw new Error('CONFIG_SAVE_FAILED');}}
+      throw error;
     }finally{if(lifecycleAction)this.lifecycleBusy.delete(name);}
   }
   onStateChange(handler: (state: AccountState) => void): void { for (const account of this.accounts) account.on("stateChange", handler); }

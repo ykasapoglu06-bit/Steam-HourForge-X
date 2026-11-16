@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import type { AccountManager } from "./manager.js";
 
-export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard" | "removeAccount">, port = 17321, onShutdown?: () => void) {
+export async function startDashboard(manager: Pick<AccountManager, "getStates" | "control" | "addAccount" | "updatePreferences" | "lookupProfile" | "addGame" | "achievements" | "previewAchievements" | "completeAchievements" | "login" | "guard" | "removeAccount" | "setGoal" | "backup" | "previewBackup" | "restoreBackup">, port = 17321, onShutdown?: () => void) {
   let closing=false;
   const assetPaths=["/app.js", "/style.css", "/refinement.css", "/i18n.js", "/icon.svg", "/logo.png", "/flags/tr.svg", "/flags/en.svg", "/logos/steamidcheck.svg", "/avatar.svg", "/logos/steam.ico", "/logos/vaclist.ico", "/logos/csrep.ico", "/logos/csstats.ico", "/logos/cswatch.png"];
   // Keep HTML, JS and CSS from the same launch, even when files are updated on disk.
@@ -26,13 +26,13 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
       res.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' });
       res.end(assets.get(req.url!)); return;
     }
-    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.4.13", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
+    if (req.method === "GET" && req.url === "/api/status") return json(200, { app: "Steam HourForge X", version: "2.5.0", shuttingDown: closing, serverTime: Date.now(), accounts: manager.getStates() });
     if(closing&&req.method==='POST'&&req.url!=='/api/shutdown')return json(503,{error:'APP_SHUTTING_DOWN'});
-    if (req.method === "POST" && ["/api/shutdown", "/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
+    if (req.method === "POST" && ["/api/backup", "/api/backup-preview", "/api/backup-restore", "/api/goal", "/api/shutdown", "/api/control", "/api/accounts", "/api/preferences", "/api/profile", "/api/games", "/api/achievements", "/api/achievement-preview", "/api/achievement-complete", "/api/login", "/api/guard", "/api/remove-account"].includes(req.url ?? "")) {
       if (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json")) return json(403, { error: "LOCAL_ONLY" });
       try {
         const chunks: Buffer[] = [];
-        const limit = req.url === '/api/achievement-complete' ? 1024 * 1024 : 8192;
+        const limit = req.url === '/api/achievement-complete' ? 1024 * 1024 : req.url?.startsWith('/api/backup')?512*1024:8192;
         let bytes = 0;
         for await (const part of req) {
           const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part);
@@ -42,6 +42,13 @@ export async function startDashboard(manager: Pick<AccountManager, "getStates" |
         }
         const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (!data || typeof data !== 'object' || Array.isArray(data)) return json(400, { error: "INVALID_SETTINGS" });
+        if(req.url==='/api/backup')return json(200,manager.backup());
+        if(req.url==='/api/backup-preview')return json(200,manager.previewBackup(data.backup));
+        if(req.url==='/api/backup-restore'){await manager.restoreBackup(data.backup,data.confirmed===true);return json(200,{ok:true});}
+        if(req.url==='/api/goal'){
+          if(typeof data.name!=='string'||!Number.isSafeInteger(data.appid)||data.appid<1||data.appid>2147483647||!(data.minutes===null||(Number.isSafeInteger(data.minutes)&&data.minutes>0&&data.minutes<=60000000)))return json(400,{error:'INVALID_SETTINGS'});
+          manager.setGoal(data.name,data.appid,data.minutes);return json(200,{ok:true});
+        }
         if(req.url==='/api/shutdown'){
           if(data?.confirmed!==true)return json(400,{error:'SHUTDOWN_CONFIRMATION_REQUIRED'});
           if(!onShutdown)return json(503,{error:'SHUTDOWN_UNAVAILABLE'});

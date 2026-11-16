@@ -1,0 +1,4 @@
+import {expect,it} from 'vitest';import {mkdtempSync,rmSync,writeFileSync,readdirSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {readRuntime,saveRuntime} from '../src/runtime-state.js';
+it('isolates account snapshots, preserves pause/time/history and tolerates a corrupt snapshot',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'hourforge-runtime-'));try{const value={group:2,remainingMs:123456,manualPaused:true,events:[{at:123,kind:'paused',detail:''}]};saveRuntime(dir,'first',value);saveRuntime(dir,'second',{...value,group:4,manualPaused:false});expect(readRuntime(dir,'first')).toEqual(value);expect(readRuntime(dir,'second')?.group).toBe(4);expect(readRuntime(dir,'missing')).toBeNull();for(const file of readdirSync(join(dir,'runtime')))writeFileSync(join(dir,'runtime',file),'broken');expect(readRuntime(dir,'first')).toBeNull();}finally{rmSync(dir,{recursive:true,force:true});}
+});

@@ -89,6 +89,14 @@ You can remove the last entry and add a new one later. Conflicting account actio
 
 The reported state means the app sent a playing state to Steam. It does not independently verify credited hours. Refresh the library to update recorded playtime. Adding an App ID checks the Steam title; it does not grant ownership or guarantee playtime credit.
 
+## Resume, health and settings backups
+
+Manual pause and active group progress are saved locally. The group clock stops during pause, disconnection and card farming. Graceful shutdown saves the current state; abnormal exit can lose up to 30 seconds since the last checkpoint. Offline time does not count toward rotation. Label-only changes preserve the group.
+
+Open **Accounts → Health & history** for status and recent events. **Export settings** downloads a portable JSON backup. Choose a backup to review the affected entries before confirming restore. Disconnect those entries first. Restore updates matching names and adds new entries disconnected; other entries remain. Backups exclude passwords, login names, session tokens, cookies and history. Session credentials need to be entered again on another computer. Runtime group checkpoints stay local and are not included in the portable settings backup. Backup JSON is not encrypted and contains account labels and local entry identifiers; keep it private.
+
+Use **Set hour goal** on an owned game to set its target total Steam playtime. When a library refresh reports that total, the game stops participating in all farming queues and remains visible. Clear the goal to resume it. Existing playtime counts toward the total; this is not a target for additional hours. Steam updates can lag. No goals are added automatically.
+
 ## Achievement operations on Windows
 
 1. Keep the Steam desktop client online with the **same account** selected in the dashboard. Stop games running in other sessions.
@@ -121,6 +129,7 @@ Account cards show the signed-in persona and available identity details. **Steam
 | --- | --- |
 | `config.json` | Account entries and settings; may contain credentials if configured manually. |
 | `data/tokens/` | Saved Steam refresh tokens. |
+| `data/runtime/` | Local group progress and recent events. |
 | `data/steam/` | Per-account Steam client cache. |
 | `data/achievement-actions.jsonl` | Achievement completion attempts. |
 | `data/steam-hourforge-x.log` | Desktop launcher output. |
@@ -141,7 +150,7 @@ The app has no analytics. Steam connections, artwork requests and external profi
 
 ## Development and contributions
 
-The backend uses TypeScript and the interface uses plain JavaScript/CSS. Windows and Linux builds run in [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml). The v2.4.13 checks passed **120 tests**, with desktop/mobile layout checks recorded for v2.4.10; see [release checks](docs/RELEASE_CHECKS.md) for scope and limitations.
+The backend uses TypeScript and the interface uses plain JavaScript/CSS. Windows and Linux builds run in [GitHub Actions](https://github.com/ykasapoglu06-bit/Steam-HourForge-X/actions/workflows/ci.yml). The v2.5.0 checks passed **137 tests**, with desktop/mobile layout checks recorded for v2.4.10; see [release checks](docs/RELEASE_CHECKS.md) for scope and limitations.
 
 Bug reports and feature requests are welcome in **English or Turkish**. Include the app version, operating system and reproduction steps. Never attach passwords, tokens, cookies, active QR codes or your private configuration. See [CONTRIBUTING.md](CONTRIBUTING.md) and [recent changes](docs/CHANGELOG.md).
 

@@ -18,6 +18,8 @@ export const AccountSchema = z.object({
   persona: z.number().int().min(0).max(7).default(1),
   enabled: z.boolean().default(true),
   loginMethod: z.enum(["credentials", "qr"]).default("credentials"),
+  manualPaused: z.boolean().default(false),
+  hourGoals: z.record(z.string().regex(/^[1-9]\d{0,9}$/),z.number().int().min(1).max(60000000)).default({}),
   farmingMode: z.enum(["hours", "cards", "fixed"]).default("hours"),
   priorityGames: z.array(z.number().int().positive()).max(32).default([]),
   rotationMinutes: z.number().int().min(5).max(240).default(30),

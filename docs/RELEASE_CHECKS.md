@@ -162,3 +162,29 @@ Hours groups wrap around to earlier games to fill the final partial group with u
 ### Türkçe
 
 Saat grupları, eksik kalan son grubu en fazla 32 farklı oyuna tamamlamak için listenin başına döner. 35 oyunda ikinci grup, son üç oyunla önceki 29 oyundan oluşur. Öncelikler her grupta kalır, diğer oyunların tamamı sıraya girer ve tam sıra/sıradaki oyun görünümü aynı dolu grupları kullanır. 32'den az oyun varsa mevcut farklı oyunların tamamı kullanılır. Yalnızca seçtiklerim modu ve tek oyunlu kart sırası korunur. Zamanlı geçiş ve farklı kütüphane boyutları dahil 120 test ve Windows derlemesi başarılı.
+
+## v2.5.0
+
+### English
+
+- Remember manual pause, group position and remaining active group time across restarts. Runtime checkpoints are written locally every 30 seconds and during graceful shutdown; time while closed, paused, disconnected or waiting for the card queue does not consume the hours group clock. A forced crash can lose up to the last checkpoint interval.
+- Label-only changes keep the current group and timer. Explicit config game lists remain the reporting scope while the full library stays visible.
+- Save lifecycle intent before side effects and restore saved settings if a connection action fails. New regression coverage checks failed start/disconnect/sign-in persistence.
+- Add Accounts → Health & history, with account status, library/runtime errors and up to 100 locally saved events per account.
+- Add settings export and reviewed restore in Accounts. Backups contain labels, modes, priorities, manual games, configured game scope, goals and manual pause. They exclude passwords, login names, tokens, cookies, Steam caches and event history. Affected accounts must be disconnected; new entries are added disconnected. Existing local sign-in configuration is kept locally.
+- Add a total-playtime goal to each owned game's card. After Steam library refresh confirms the target, the game leaves hours, selected-only and card queues, but remains in the library. Clear the goal to include it again. Steam's playtime updates may be delayed.
+- Keep the existing 32-slot wrap behavior. No fair-rotation feature was added.
+- Validation: 137 tests, Windows TypeScript/native build, zero known production dependency vulnerabilities. Demo-only browser checks cover history and saving a goal; DOM tests cover reviewed restore and goal controls. No real achievements were modified. Physical mobile testing and live restore over user accounts were not performed.
+
+### Türkçe
+
+- Elle duraklatma tercihi, grup ve kalan aktif grup süresi yeniden açılışta korunur. Durum 30 saniyede bir ve düzgün kapanışta yerel kayda yazılır. Uygulama kapalıyken, duraklatılmışken, bağlantısızken veya kart sırası beklenirken saat grubunun süresi tüketilmez. Ani çökmede son kayıt aralığı kadar ilerleme kaybolabilir.
+- Yalnızca etiket değişince grup ve süre korunur. Dosyada belirtilen sınırlı oyun listesi çalışma kapsamı olarak kalır; tam kütüphane görünmeye devam eder.
+- Bağlantı işlemlerinin niyeti yan etkilerden önce kaydedilir; işlem başarısızsa kayıtlı ayarlar geri alınır. Başlatma, bağlantı kesme ve giriş hataları için kayıt tutarlılığı testleri eklendi.
+- Hesaplar → Sağlık ve geçmiş ekranı eklendi: hesap durumu, kütüphane/durum kayıt hataları ve hesap başına son 100 yerel olay.
+- Hesaplar bölümüne ayar yedekleme ve önizlemeli geri yükleme eklendi. Yedek; etiket, mod, öncelik, elle eklenen oyunlar, yapılandırılmış oyun kapsamı, hedef ve duraklatma tercihini içerir. Şifre, giriş adı, anahtar, çerez, Steam önbelleği ve geçmiş içermez. Etkilenen hesaplar bağlantısız olmalıdır; yeni kayıtlar bağlantısız eklenir. Mevcut yerel giriş ayarları yerelde tutulur.
+- Sahip olunan oyun kartlarına toplam saat hedefi eklendi. Steam kütüphanesi yenilendiğinde hedef doğrulanırsa oyun saat, yalnızca seçtiklerim ve kart sırasından çıkar; kütüphanede kalır. Hedef kaldırılınca tekrar sıraya girebilir. Steam saat bilgisi gecikmeli güncellenebilir.
+- Mevcut 32 yeri doldurma davranışı korundu. Adil rotasyon özelliği eklenmedi.
+- Doğrulama: 137 test, Windows TypeScript/yerel derlemesi başarılı; üretim bağımlılıklarında bilinen açık yok. Örnek hesaplarla tarayıcıda geçmiş ve hedef kaydetme kontrol edildi; önizlemeli geri yükleme ve hedef kontrolleri DOM testleriyle kapsandı. Gerçek başarımlar değiştirilmedi. Fiziksel mobil cihaz ve gerçek hesaplar üzerine canlı geri yükleme testi yapılmadı.
+
+Live restart check / Canlı yeniden açılış kontrolü: Installed 2.5.0 was gracefully shut down and reopened with the real saved accounts. Manual pause was preserved for all three; the two running accounts returned to group index 1 and still reported 32 games. Runtime error fields were empty. Real user settings were exported locally and checked for credential fields; no restore was applied to user accounts. / Kurulu 2.5.0 gerçek kayıtlı hesaplarla düzgün kapatılıp açıldı. Üç hesabın duraklatma tercihi korundu; çalışan iki hesap grup 1'e dönerek 32 oyun bildirdi. Durum kayıt hata alanları boştu. Gerçek ayarlar yerelde dışa aktarıldı ve giriş bilgisi alanlarının bulunmadığı kontrol edildi; kullanıcı hesaplarına geri yükleme uygulanmadı.

@@ -141,3 +141,16 @@ it('reports a real configuration write failure without publishing the new accoun
  const before=readFileSync(file,'utf8');mkdirSync(file+'.tmp');
  expect(()=>manager.addAccount('Blocked')).toThrow('CONFIG_SAVE_FAILED');expect(manager.count).toBe(0);expect(readFileSync(file,'utf8')).toBe(before);expect(config.accounts).toHaveLength(0);
 });
+
+it('persists pause choices before applying them and rolls back failed start settings',async()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL'],enabled:false}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file);const account=(manager as any).accounts[0];vi.spyOn(account,'stop').mockResolvedValue();vi.spyOn(account,'start').mockResolvedValue();
+ const save=vi.spyOn(manager as any,'save').mockImplementationOnce(()=>{throw new Error('CONFIG_SAVE_FAILED');});await expect(manager.control('main','start')).rejects.toThrow('CONFIG_SAVE_FAILED');expect(config.accounts[0]!.enabled).toBe(false);expect(account.start).not.toHaveBeenCalled();
+ await manager.control('main','pause');expect(JSON.parse(readFileSync(file,'utf8')).accounts[0].manualPaused).toBe(true);
+ save.mockImplementationOnce(()=>{throw new Error('CONFIG_SAVE_FAILED');});await expect(manager.control('main','resume')).rejects.toThrow('CONFIG_SAVE_FAILED');expect(account.getState().manualPaused).toBe(true);
+});
+
+it('keeps lifecycle disk and memory settings consistent when disconnect or sign-in fails',async()=>{
+ const path=folder(),file=join(path,'config.json'),config=ConfigSchema.parse({accounts:[{name:'main',games:['ALL'],enabled:true}],settings:{dataDirectory:join(path,'data')}}),manager=new AccountManager(config,file),account=(manager as any).accounts[0];
+ vi.spyOn(account,'stop').mockRejectedValueOnce(new Error('STOP_FAILED'));await expect(manager.control('main','stop')).rejects.toThrow('STOP_FAILED');expect(config.accounts[0]!.enabled).toBe(true);expect(JSON.parse(readFileSync(file,'utf8')).accounts[0].enabled).toBe(true);
+ vi.spyOn(account,'beginLogin').mockRejectedValueOnce(new Error('LOGIN_FAILED'));await expect(manager.login('main',{method:'credentials',accountName:'new-login',password:'fixture'})).rejects.toThrow('LOGIN_FAILED');expect(config.accounts[0]!.accountName).toBeUndefined();expect(JSON.parse(readFileSync(file,'utf8')).accounts[0].accountName).toBeUndefined();
+});

@@ -2,7 +2,7 @@ import { t, language, setLanguage, locale } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
-const APP_VERSION='2.4.13';
+const APP_VERSION='2.5.0';
 let versionMismatch=false;
 function showVersionError(){
   versionMismatch=true;
@@ -27,6 +27,7 @@ let accounts=[],selectedName='',view='activity',filter='all',reachable=false,las
 let gameSignatures=new Map(),sidebarSignature='',accountSignature='',toastTimer,queueSignature='';
 const achievementBusy=new Set(),achievementErrors=new Map();
 let samPreview=null,samWriting=false,samPreviewSequence=0;
+let backupPending=null;
 let quitting=false,appClosed=false,shutdownPollTimer=null;
 let loginMethod='credentials',loginPending=false,loginLocalError='',loginAccount='',loginLastPhase='';
 try { selectedName=localStorage.getItem('steam-hourforge-x.account')||''; } catch {}
@@ -85,7 +86,7 @@ function selectAccount(name){
 
 function setView(next){
   toast('');
-  view=['activity','library','discover','accounts','queue','about'].includes(next)?next:'activity';
+  view=['activity','library','discover','accounts','queue','about','health'].includes(next)?next:'activity';
   render();
   window.scrollTo({top:0,behavior:'instant'});
 }
@@ -127,15 +128,16 @@ function renderSidebar(){
 
 function gameMarkup(game,a,fromProfile=false){
   const active=activeSet(a).has(game.appid),pin=a.priorityGames.includes(game.appid),owned=game.owned!==false;
-  const subtitle=active?t('activeLabel'):fromProfile?(owned?t('owned'):t('notOwned')):pin?t('priorityLabel'):game.remaining?`${game.remaining} ${t('cards').toLocaleLowerCase(locale())}`:t('queued');
+  const reached=a.hourGoals?.[game.appid]&&game.playtimeMinutes>=a.hourGoals[game.appid];
+  const subtitle=reached?t('goalReached'):active?t('activeLabel'):fromProfile?(owned?t('owned'):t('notOwned')):pin?t('priorityLabel'):game.remaining?`${game.remaining} ${t('cards').toLocaleLowerCase(locale())}`:t('queued');
   const progress=a.achievements?.[game.appid],busy=achievementBusy.has(a.name+':'+game.appid),failed=achievementErrors.get(a.name+':'+game.appid);
   const achievement=progress?t('achievementCount',progress):failed?t('achievementUnavailable'):t('checkAchievements');
   const complete=owned&&(!progress||progress.unlocked<progress.total)?`<button class="achievement-button sam-open" data-complete-achievements="${game.appid}" ${a.samBusy||achievementBusy.size>0||!reachable||!a.connectedSince?'disabled':''}>${escape(t(progress?'completeAchievements':'inspectLocalAchievements'))}</button>`:'';
-  return `<article class="game ${active?'active':''}"><img src="https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg" alt="" loading="lazy" data-game-image><div class="game-body"><div class="game-title" title="${escape(game.name)}">${escape(game.name)}</div><small class="${active?'activity-tag':pin?'priority-tag':''}">${escape(subtitle)}</small><small>${escape(t('ownedHours',{hours:hours(game.playtimeMinutes)}))} · ${game.appid}</small>${a.manualGames?.includes(game.appid)?`<small>${escape(t('manualTag'))}</small>`:''}${owned?`<button class="achievement-button" data-achievement="${game.appid}" title="${escape(t('achievementHelp'))}" ${busy||a.samBusy||!reachable||!a.connectedSince?'disabled':''}>${escape(busy?t('checkingAchievementProgress'):achievement)}</button>${complete}${failed?`<small class="achievement-error">${escape(errorMessage(new Error(failed)))}</small>`:''}`:''}</div><button class="pin" data-pin="${game.appid}" aria-pressed="${pin}" aria-label="${escape(t(pin?'unpin':'pin')+' '+game.name)}" title="${escape(t(pin?'unpin':'pin'))}" ${!owned||mutating||!reachable?'disabled':''}>${pin?'★':'☆'}</button></article>`;
+  return `<article class="game ${active?'active':''}"><img src="https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg" alt="" loading="lazy" data-game-image><div class="game-body"><div class="game-title" title="${escape(game.name)}">${escape(game.name)}</div><small class="${active?'activity-tag':pin?'priority-tag':''}">${escape(subtitle)}</small><small>${escape(t('ownedHours',{hours:hours(game.playtimeMinutes)}))} · ${game.appid}</small>${a.manualGames?.includes(game.appid)?`<small>${escape(t('manualTag'))}</small>`:''}${owned?`<button class="achievement-button" data-achievement="${game.appid}" title="${escape(t('achievementHelp'))}" ${busy||a.samBusy||!reachable||!a.connectedSince?'disabled':''}>${escape(busy?t('checkingAchievementProgress'):achievement)}</button>${complete}<button class="achievement-button goal-button" data-goal="${game.appid}" ${mutating||!reachable?'disabled':''}>${escape(a.hourGoals?.[game.appid]?t('goalProgress',{hours:hours(a.hourGoals[game.appid]),done:(game.playtimeMinutes>=a.hourGoals[game.appid]?t('goalReached'):t('goalPending'))}):t('setHourGoal'))}</button>${failed?`<small class="achievement-error">${escape(errorMessage(new Error(failed)))}</small>`:''}`:''}</div><button class="pin" data-pin="${game.appid}" aria-pressed="${pin}" aria-label="${escape(t(pin?'unpin':'pin')+' '+game.name)}" title="${escape(t(pin?'unpin':'pin'))}" ${!owned||mutating||!reachable?'disabled':''}>${pin?'★':'☆'}</button></article>`;
 }
 
 function renderGames(id,games,a,fromProfile=false,emptyKey='noGames'){
-  const signature=JSON.stringify([language,reachable,mutating,a.name,Boolean(a.connectedSince),fromProfile,emptyKey,games,a.priorityGames,a.manualGames,[...activeSet(a)],a.achievements,a.samBusy,[...achievementBusy],[...achievementErrors]]);
+  const signature=JSON.stringify([a.hourGoals,language,reachable,mutating,a.name,Boolean(a.connectedSince),fromProfile,emptyKey,games,a.priorityGames,a.manualGames,[...activeSet(a)],a.achievements,a.samBusy,[...achievementBusy],[...achievementErrors]]);
   if(gameSignatures.get(id)===signature)return;gameSignatures.set(id,signature);
   const focused=document.activeElement?.closest('[data-pin]')?.dataset.pin;
   const hadFocus=focused&&$(id).contains(document.activeElement);
@@ -179,30 +181,32 @@ function render(){
   $('shutdownApp').title=t(accounts.some(account=>account.samBusy)?'quitBusyHelp':'quitHelp');
   const a=current();
   document.querySelectorAll('[data-view]').forEach(button=>{button.classList.toggle('selected',button.dataset.view===view);button.setAttribute('aria-current',button.dataset.view===view?'page':'false');});
-  for(const name of ['activity','library','discover','accounts','queue','about'])show(name+'View',view===name);
+  for(const name of ['activity','library','discover','accounts','queue','about','health'])show(name+'View',view===name);
   text('viewName',t(view==='activity'?'dashboard':view));renderSidebar();renderAccounts();
   text('overall',t('connectedAccounts',{count:accounts.filter(x=>['farming','paused','online'].includes(x.status)).length}));
   show('connectionBanner',!reachable);text('connectionBanner',t('offlineBanner'));
   ['pauseAll','resumeAll','addAccount','addAccount2'].forEach(id=>$(id).disabled=mutating||!reachable);
   show('emptyAccounts',!a&&view!=='about');
-  if(!a){text('accountLabel','');$('accountLabel').hidden=true;for(const id of ['hero','stats','loginPanel','activityView','libraryView','discoverView','queueView','cardFocus','accountsView'])show(id,false);$('pauseAll').disabled=$('resumeAll').disabled=true;return;}
+  renderHealth();
+  if(!a){text('accountLabel','');$('accountLabel').hidden=true;for(const id of ['hero','stats','loginPanel','activityView','libraryView','discoverView','queueView','cardFocus'])show(id,false);$('pauseAll').disabled=$('resumeAll').disabled=true;return;}
   const needsLogin=renderLogin(a);
   $('pauseAll').disabled=mutating||!reachable||!accounts.some(x=>(x.samBusy&&!x.manualPaused)||(x.status==='farming'&&!x.isPaused));
   $('resumeAll').disabled=mutating||!reachable||!accounts.some(x=>x.manualPaused);
-  text('accountLabel',a.label);const running=reachable&&a.status==='farming'&&!a.isPaused,cardActive=a.mode==='cards'&&a.cardQueue.length>0;
+  text('accountLabel',a.label);const running=reachable&&a.status==='farming'&&!a.isPaused,cardActive=a.mode==='cards'&&(a.eligibleCardQueue||a.cardQueue).length>0;
   text('statusLabel',reachable?status(a):t('status.offline'));
   $('stateChip').classList.toggle('warning',!running);
   text('headline',!reachable?t('stoppedTitle'):running?t(a.mode==='fixed'?'workingFixed':cardActive?'workingCards':'workingHours'):a.status==='paused'?t('pausedTitle'):a.status==='offline'?t('stoppedTitle'):a.status==='connecting'||a.status==='online'?t('connectionTitle'):status(a));
-  const cardName=a.cardQueue[0]?.name||'';
-  text('description',!reachable?t('offlineBanner'):running?cardActive?t('cardsSummary',{game:cardName}):t('prioritySummary',{pinned:a.priorityGames.length,rest:Math.max(0,a.library.length-a.priorityGames.length)}):a.status==='paused'?t(a.manualPaused?'manualPause':'steamPause'):a.qrCode?t('qrHelp'):t('connectIssue'));
+  const cardName=(a.eligibleCardQueue||a.cardQueue)[0]?.name||'';
+  text('description',!reachable?t('offlineBanner'):running?cardActive?t('cardsSummary',{game:cardName}):t('prioritySummary',{pinned:a.eligiblePriorityCount??a.priorityGames.length,rest:Math.max(0,(a.eligibleGameCount??a.library.length)-(a.eligiblePriorityCount??a.priorityGames.length))}):a.status==='paused'?t(a.manualPaused?'manualPause':'steamPause'):a.qrCode?t('qrHelp'):t('connectIssue'));
   if(a.mode==='fixed'&&running)text('description',t(a.priorityGames.length?'fixedSummary':'fixedEmpty',{count:a.priorityGames.length}));
+  if(running&&a.eligibleGameCount===0&&a.completedGoalIds?.length){text('headline',t('targetsFinished'));text('description',t('targetsFinishedHelp'));}
   if(a.samBusy)text('description',t(a.manualPaused?'samPausePending':'samBusy'));
   if(a.samBusy)text('headline',t('achievementOperation'));
   text('pause',t(a.manualPaused?'resume':'pause'));$('pause').disabled=mutating||!reachable||(!a.samBusy&&!['farming','paused'].includes(a.status));
   const offline=['offline','error','skipped'].includes(a.status);text('connect',t(offline?'connect':'disconnect'));$('connect').disabled=mutating||!reachable||a.samBusy;
   $('logout').disabled=mutating||!reachable||!a.steamId||a.samBusy;
-  text('activeCount',reachable?activeSet(a).size:'—');text('libraryCount',a.library.length);text('priorityCount',a.priorityGames.length);text('remainingCards',a.cardCheckedAt?a.cardQueue.reduce((sum,g)=>sum+g.remaining,0):'—');
-  show('hero',!needsLogin&&!['accounts','about'].includes(view));show('stats',!needsLogin&&!['accounts','about'].includes(view));
+  text('activeCount',reachable?activeSet(a).size:'—');text('libraryCount',a.library.length);text('priorityCount',a.priorityGames.length);text('remainingCards',a.cardCheckedAt?(a.eligibleCardQueue||a.cardQueue).reduce((sum,g)=>sum+g.remaining,0):'—');
+  show('hero',!needsLogin&&!['accounts','about','health'].includes(view));show('stats',!needsLogin&&!['accounts','about','health'].includes(view));
   show('activityView',view==='activity'&&!needsLogin);
   show('logout',false);
   const active=activeSet(a);text('activeSummary',t('expandGames',{count:active.size}));if($('activeDetails').open)renderGames('activeGames',a.library.filter(g=>active.has(g.appid)),a,false,'noActive');
@@ -213,16 +217,16 @@ function render(){
   $('priorityChips').innerHTML=a.priorityGames.length?a.priorityGames.map(id=>{const g=a.library.find(game=>game.appid===id);return `<button data-show-pin="${id}">★ ${escape(g?.name||id)}</button>`}).join(''):`<p class="empty">${escape(t('prioritiesEmpty'))}</p>`;
   show('fullPins',a.mode!=='fixed'&&a.priorityGames.length>=32);
   show('cardFocus',view==='activity'&&a.mode==='cards'&&!needsLogin);
-  text('cardCurrent',a.cardQueue[0]?.name||t(a.cardStatus==='checking'?'checkingCards':'cardFinished'));
-  text('cardFocusInfo',a.cardQueue.length?t('cardFocusInfo',{remaining:a.cardQueue[0].remaining,games:a.cardQueue.length,drops:a.cardSessionDrops||0}):t('cardFallback'));
+  text('cardCurrent',(a.eligibleCardQueue||a.cardQueue)[0]?.name||t(a.cardStatus==='checking'?'checkingCards':'cardFinished'));
+  text('cardFocusInfo',(a.eligibleCardQueue||a.cardQueue).length?t('cardFocusInfo',{remaining:(a.eligibleCardQueue||a.cardQueue)[0].remaining,games:(a.eligibleCardQueue||a.cardQueue).length,drops:a.cardSessionDrops||0}):t('cardFallback'));
   text('cardChecked',a.cardCheckedAt?t('checked',{time:time(a.cardCheckedAt)}):t('waitingCards'));
-  $('cardBadgeLink').href=a.cardQueue[0]?`https://steamcommunity.com/profiles/${a.steamId}/gamecards/${a.cardQueue[0].appid}/`:'https://steamcommunity.com/my/badges/';
+  $('cardBadgeLink').href=(a.eligibleCardQueue||a.cardQueue)[0]?`https://steamcommunity.com/profiles/${a.steamId}/gamecards/${(a.eligibleCardQueue||a.cardQueue)[0].appid}/`:'https://steamcommunity.com/my/badges/';
   for(const mode of ['hours','cards','fixed']){$(mode).setAttribute('aria-pressed',a.mode===mode);$(mode).disabled=mutating||!reachable;}
   text('modeHelp',t(a.mode==='fixed'?(a.priorityGames.length?'fixedHelp':'fixedEmpty'):a.mode==='hours'?'hoursHelp':'cardsHelp'));
-  text('batch',cardActive?`1 / ${a.cardQueue.length}`:a.batchCount?`${a.batchIndex+1} / ${a.batchCount}`:'—');text('lastReport',time(a.lastReportedAt));
+  text('batch',cardActive?`1 / ${(a.eligibleCardQueue||a.cardQueue).length}`:a.batchCount?`${a.batchIndex+1} / ${a.batchCount}`:'—');text('lastReport',time(a.lastReportedAt));
   $('next').disabled=mutating||!running||cardActive||a.batchCount<=1;
-  text('cardInfo',a.cardStatus==='checking'?t('checkingCards'):a.cardStatus==='error'?t('cardScanFailed'):a.cardCheckedAt?t('cardSummary',{games:a.cardQueue.length,cards:a.cardQueue.reduce((sum,g)=>sum+g.remaining,0)})+' '+t('checked',{time:time(a.cardCheckedAt)}):t('waitingCards'));
-  $('cardQueue').innerHTML=a.cardQueue.slice(0,5).map(g=>`<li><span>${escape(g.name)}</span><b>${g.remaining}</b></li>`).join('');
+  text('cardInfo',a.cardStatus==='checking'?t('checkingCards'):a.cardStatus==='error'?t('cardScanFailed'):a.cardCheckedAt?t('cardSummary',{games:(a.eligibleCardQueue||a.cardQueue).length,cards:(a.eligibleCardQueue||a.cardQueue).reduce((sum,g)=>sum+g.remaining,0)})+' '+t('checked',{time:time(a.cardCheckedAt)}):t('waitingCards'));
+  $('cardQueue').innerHTML=(a.eligibleCardQueue||a.cardQueue).slice(0,5).map(g=>`<li><span>${escape(g.name)}</span><b>${g.remaining}</b></li>`).join('');
   $('refreshCards').disabled=mutating||!reachable||a.cardStatus==='checking'||!a.connectedSince;
   $('refreshLibrary').disabled=$('scanAll').disabled=mutating||!reachable||a.libraryRefreshing||!a.connectedSince;
   text('libraryStatus',a.libraryRefreshing?t('scanning'):a.libraryError?errorMessage(new Error(a.libraryError)):a.libraryCheckedAt?t('librarySynced',{count:a.library.length,time:time(a.libraryCheckedAt)}):t('librarySyncHelp'));
@@ -233,7 +237,7 @@ function render(){
   const search=$('search').value.toLocaleLowerCase(locale());let games=a.library;
   if(filter==='active')games=games.filter(g=>active.has(g.appid));
   if(filter==='priority')games=games.filter(g=>a.priorityGames.includes(g.appid));
-  if(filter==='cards')games=a.cardQueue.map(g=>({...g,playtimeMinutes:a.library.find(x=>x.appid===g.appid)?.playtimeMinutes||0}));
+  if(filter==='cards')games=(a.eligibleCardQueue||a.cardQueue).map(g=>({...g,playtimeMinutes:a.library.find(x=>x.appid===g.appid)?.playtimeMinutes||0}));
   games=games.filter(g=>(g.name+' '+g.appid).toLocaleLowerCase(locale()).includes(search));
   if($('libraryDetails').open)renderGames('libraryGames',games,a);text('librarySummary',t('expandGames',{count:games.length}));text('gameCount',t('profileResults',{count:games.length}));text('slots',t('slots',{count:a.priorityGames.length}));
   document.querySelectorAll('[data-filter]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.filter===filter));
@@ -267,6 +271,7 @@ document.addEventListener('click',event=>{
   if(button.dataset.manage){selectAccount(button.dataset.manage);setView('activity');window.scrollTo({top:0});return;}
   if(button.dataset.filter){filter=button.dataset.filter;render();return;}
   if(button.dataset.pin){void togglePriority(Number(button.dataset.pin));return;}
+  if(button.dataset.goal){openGoal(Number(button.dataset.goal));return;}
   if(button.dataset.achievement){void checkAchievement(Number(button.dataset.achievement));return;}
   if(button.dataset.completeAchievements){void previewCompletion(Number(button.dataset.completeAchievements));return;}
   if(button.dataset.showPin){filter='priority';setView('library');return;}
@@ -418,3 +423,16 @@ $('applyAchievements').onclick=async()=>{
 };
 
 
+
+function renderHealth(){
+ const summary=$('healthSummary'),list=$('healthEvents');if(!summary||!list)return;
+ summary.innerHTML=accounts.map(a=>`<article class="health-card"><h3>${escape(a.label)}</h3><p>${escape(status(a))} · ${escape(t('healthLibrary',{count:a.library.length}))}</p><p>${escape(t('healthSync',{time:time(a.libraryCheckedAt)}))}</p>${[a.authError,a.libraryError,a.runtimeError,a.cardStatus==='error'?'CARD_SCAN_FAILED':null].filter(Boolean).map(code=>`<p class="form-error">${escape(errorMessage(new Error(code)))}</p>`).join('')}${a.lastError?`<p>${escape(t('healthIssue'))}</p>`:''}</article>`).join('');
+ const events=accounts.flatMap(a=>(a.events||[]).map(e=>({...e,label:a.label}))).sort((a,b)=>b.at-a.at).slice(0,100);
+ list.innerHTML=events.length?events.map(e=>`<li><time>${escape(new Date(e.at).toLocaleString(locale()))}</time><strong>${escape(e.label)}</strong><span>${escape(t('event_'+e.kind))}${e.kind==='status'?' · '+escape(t('status.'+e.detail)):['group','library','cards','goal','goalReached'].includes(e.kind)?' · '+escape(e.kind==='group'?Number(e.detail)+1:e.detail):''}</span></li>`).join(''):`<li>${escape(t('noEvents'))}</li>`;
+}
+function openGoal(appid){const a=current();if(!a)return;const d=$('goalDialog');d.dataset.name=a.name;d.dataset.appid=String(appid);text('goalGame',a.library.find(g=>g.appid===appid)?.name||String(appid));$('goalHours').value=a.hourGoals?.[appid]?a.hourGoals[appid]/60:'';text('goalError','');d.showModal();}
+async function saveGoal(minutes){const d=$('goalDialog');const buttons=[...d.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{await request('/api/goal',{name:d.dataset.name,appid:Number(d.dataset.appid),minutes});if(pollTask)await pollTask;await poll();d.close();}catch(e){text('goalError',errorMessage(e));}finally{buttons.forEach(b=>b.disabled=false);}}
+$('goalForm').onsubmit=e=>{e.preventDefault();void saveGoal(Math.round(Number($('goalHours').value)*60));};$('clearGoal').onclick=()=>saveGoal(null);
+$('exportBackup').onclick=async()=>{const b=$('exportBackup');b.disabled=true;try{const backup=await request('/api/backup',{});const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='hourforge-settings-'+new Date().toISOString().slice(0,10)+'.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);text('backupStatus',t('backupExported'));}catch(e){text('backupStatus',errorMessage(e));}finally{b.disabled=false;}};
+$('importBackup').onchange=async()=>{const input=$('importBackup'),file=input.files?.[0];backupPending=null;if(!file)return;try{if(file.size>512*1024)throw new Error('BACKUP_INVALID');const data=JSON.parse(await file.text());const preview=await request('/api/backup-preview',{backup:data});backupPending=data;$('backupPreview').innerHTML=preview.accounts.map(a=>`<li><strong>${escape(a.label)}</strong> · ${escape(a.name)} · ${escape(t(a.exists?'backupExisting':'backupNew'))} · ${escape(t('healthLibrary',{count:a.games}))} · ${escape(t('mode_'+a.mode))}</li>`).join('');text('restoreError','');$('backupDialog').showModal();}catch(e){text('backupStatus',errorMessage(e));}finally{input.value='';}};
+$('restoreBackup').onclick=async()=>{if(!backupPending)return;const b=$('restoreBackup');b.disabled=true;try{await request('/api/backup-restore',{backup:backupPending,confirmed:true});backupPending=null;if(pollTask)await pollTask;await poll();$('backupDialog').close();text('backupStatus',t('backupRestored'));}catch(e){text('restoreError',errorMessage(e));}finally{b.disabled=false;}};

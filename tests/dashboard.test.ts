@@ -98,3 +98,11 @@ it('accepts a large achievement subset while retaining bounded request bodies',a
  manager.completeAchievements.mockClear();expect((await post('/api/achievement-complete',{...body,padding:'x'.repeat(1024*1024)})).status).toBe(413);expect(manager.completeAchievements).not.toHaveBeenCalled();
  expect((await post('/api/accounts',{label:'x'.repeat(9000)})).status).toBe(413);
 });
+
+it('protects goal and backup routes and requires restore confirmation',async()=>{
+ const manager={getStates:()=>[],setGoal:vi.fn(),backup:vi.fn().mockReturnValue({format:'hourforge-settings',version:1,accounts:[]}),previewBackup:vi.fn().mockReturnValue({count:0,accounts:[]}),restoreBackup:vi.fn(async(_input,confirmed)=>{if(!confirmed)throw new Error('BACKUP_CONFIRM_REQUIRED');})};server=await startDashboard(manager as any,0);const url=`http://127.0.0.1:${(server.address() as any).port}`;
+ const post=(path:string,body:any,origin=url)=>fetch(url+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ for(const path of ['/api/goal','/api/backup','/api/backup-preview','/api/backup-restore'])expect((await post(path,{},'https://example.com')).status).toBe(403);
+ expect((await post('/api/goal',{name:'demo',appid:620,minutes:600})).status).toBe(200);expect(manager.setGoal).toHaveBeenCalledWith('demo',620,600);expect((await post('/api/goal',{name:'demo',appid:620,minutes:-1})).status).toBe(400);
+ expect((await post('/api/backup',{})).status).toBe(200);expect((await post('/api/backup-restore',{backup:{},confirmed:false})).status).toBe(400);expect((await post('/api/backup-preview',{backup:{}})).status).toBe(200);expect((await post('/api/backup-restore',{backup:{},confirmed:true})).status).toBe(200);
+});
